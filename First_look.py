@@ -24,6 +24,7 @@ for i in range(samples):
 
 # Remove the one-point function on each sample - do twice because of how small
 # the signal is!
+pdb.set_trace()
 data_central = data_central - numpy.mean(data_central.real)
 data_central = data_central - numpy.mean(data_central.real)
 
