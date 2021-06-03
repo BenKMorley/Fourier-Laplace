@@ -18,12 +18,12 @@ def GRID_convention_g(g):
     return f"g{g}".rstrip('0').rstrip('.')
 
 
-def read_in_twopt(source, sink, L, g, N, m, step=100, start=100, end=199900):
+def read_in_twopt(source, sink, mom, L, g, N, m, step=100, start=100, end=199900):
     directory = f"data/g{g:.1f}/su{N}/L{L}/m2{m:.8f}".rstrip('0') + "/twopt/"
     filename = f"cosmhol-su{N}_L{L}_g{g:.1f}_m2{m:.8f}".rstrip('0') + "-twopt."
 
     size = (end - start) // step + 1
-    data = numpy.zeros((size, L), dtype=numpy.complex128)
+    data = numpy.zeros((size, L))
 
     # Get the right key - only do this once
     f = h5py.File(f"{directory}{filename}" + f"{start}.h5", "r")
@@ -32,12 +32,15 @@ def read_in_twopt(source, sink, L, g, N, m, step=100, start=100, end=199900):
         source_ref = f['twopt'][key].attrs['source'][0].decode('ascii')
         sink_ref = f['twopt'][key].attrs['sink'][0].decode('ascii')
 
-        if source == source_ref and sink == sink_ref:
-            right_key = key
-            break
+        if (source == source_ref and sink == sink_ref):
+            mom_equal = numpy.array_equal(f['twopt'][key].attrs['mom'], numpy.array(mom))
 
-    for i, inx in enumerate(range(start, end, step)):
-        f = h5py.File(f"{directory}{filename}" + f"{start}.h5", "r")
+            if mom_equal:
+                right_key = key
+                break
+
+    for i, inx in enumerate(range(start, end + step, step)):
+        f = h5py.File(f"{directory}{filename}" + f"{inx}.h5", "r")
         data[i] = numpy.array(f['twopt'][right_key]['data'])['re']
 
     return data
@@ -52,8 +55,8 @@ def read_in_onept_emtc(comp, L, g, N, m, step=100, start=100, end=199900):
     size = (end - start) // step + 1
     data = numpy.zeros(size)
 
-    for i, inx in enumerate(range(start, end, step)):
-        f = h5py.File(f"{directory}{filename}" + f"{start}.h5", "r")
+    for i, inx in enumerate(range(start, end + step, step)):
+        f = h5py.File(f"{directory}{filename}" + f"{inx}.h5", "r")
 
         data[i] = numpy.array(f['emt']['value'])[2, 2]['re']
 

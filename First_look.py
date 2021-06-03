@@ -7,9 +7,31 @@ import pdb
 from read_in_raw import read_in_twopt, read_in_onept_emtc
 
 
-twopt_data = read_in_twopt("emtc_2_2", "emtc_2_2", 256, 0.1, 2, -0.0305)
+twopt_data = read_in_twopt("emtc_2_2", "emtc_2_2", (0, 0), 256, 0.1, 2, -0.0305)
 onept_data = read_in_onept_emtc((2, 2), 256, 0.1, 2, -0.0305)
 
+
+# We want to randomly shuffle the data and calculate the connected twopt
+# function on each bootstrap sample.
+size, L = twopt_data.shape
+no_samples = 100
+result = numpy.zeros((no_samples, L))
+FT = numpy.zeros((no_samples, L))
+
+boot_samples = numpy.random.randint(size, size=(no_samples, size))
+
+for i in tqdm(range(no_samples)):
+    result[i] = numpy.mean(twopt_data[boot_samples[i]], axis=0) - (numpy.mean(onept_data[boot_samples[i]]) / L ** 2) ** 2
+
+    for p in range(L):
+        FT[i, p] = numpy.mean(numpy.mean(twopt_data[boot_samples[i]], axis=0) * numpy.exp(-1j * p * numpy.arange(256)))
+
+
+mean = numpy.mean(result, axis=0)
+std = numpy.std(result, axis=0)
+
+plt.fill_between(range(L), mean - std, mean + std)
+plt.show()
 
 #### Script using the summarized data files is below
 

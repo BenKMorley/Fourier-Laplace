@@ -2,4 +2,4 @@ graphs/*
 *.pdf
 data/*
 test*
-
+__pycache__/*
