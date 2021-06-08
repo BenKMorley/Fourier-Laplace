@@ -64,12 +64,24 @@ std_FT = numpy.std(FT, axis=0)
 mean_LT = numpy.mean(LT, axis=0)
 std_LT = numpy.std(LT, axis=0)
 
+mean_sum = numpy.mean(LT + FT, axis=0)
+std_sum = numpy.std(LT + FT, axis=0)
+
+
 plt.errorbar(range(L), mean, std, ls='')
 plt.title("Real Space")
 plt.xlabel('x')
 fig = matplotlib.pyplot.gcf()
 fig.set_size_inches(15, 8)
 plt.savefig("graphs/First_look_twopt.png", dpi=500)
+plt.show()
+
+plt.plot(result[0:20].T)
+plt.title("Example two-point by configuration")
+plt.xlabel('x')
+fig = matplotlib.pyplot.gcf()
+fig.set_size_inches(15, 8)
+plt.savefig("graphs/First_look_twopt_ex.png", dpi=500)
 plt.show()
 
 plt.errorbar(p_s, mean_FT, std_FT, ls='')
@@ -90,6 +102,14 @@ fig.set_size_inches(15, 8)
 plt.savefig("graphs/First_look_Laplace.png", dpi=500)
 plt.show()
 
+plt.errorbar(p_s, mean_sum, std_sum, ls='')
+plt.ylim(-0.001, 0.001)
+plt.xlabel('p')
+plt.title("Sum")
+fig = matplotlib.pyplot.gcf()
+fig.set_size_inches(15, 8)
+plt.savefig("graphs/First_look_Sum.png", dpi=500)
+plt.show()
 
 #### Script using the summarized data files is below
 
