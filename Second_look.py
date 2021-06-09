@@ -6,6 +6,10 @@ import re
 from tqdm import tqdm
 import pdb
 from read_in_raw import read_in_twopt, read_in_onept_emtc
+from scipy.special import gammaincc
+from scipy.optimize import minimize, least_squares
+
+
 
 
 # PARAMETERS
@@ -39,7 +43,7 @@ def Laplace_Transform(data, p, offset=1):
 # We want to randomly shuffle the data and calculate the connected twopt
 # function on each bootstrap sample.
 size, L = twopt_data.shape
-no_samples = 1000
+no_samples = 100
 result = numpy.zeros((no_samples, L))
 FT = numpy.zeros((no_samples, L))
 LT = numpy.zeros((no_samples, L))
@@ -68,8 +72,9 @@ mean_LT = numpy.mean(LT, axis=0)
 std_LT = numpy.std(LT, axis=0)
 
 prefactor = 1 / (1 - numpy.exp(-p_s * L))
-mean_sum = numpy.mean(LT / prefactor + FT, axis=0)
-std_sum = numpy.std(LT / prefactor + FT, axis=0)
+combined = LT / prefactor + FT
+mean_sum = numpy.mean(combined, axis=0)
+std_sum = numpy.std(combined, axis=0)
 
 
 plt.errorbar(range(L), mean, std, ls='')
@@ -79,8 +84,7 @@ plt.xlabel('x')
 fig = matplotlib.pyplot.gcf()
 fig.set_size_inches(15, 8)
 plt.savefig("graphs/Second_look_twopt.png", dpi=500)
-plt.show()
-
+#plt.show()
 
 plt.errorbar(p_s, mean_FT, std_FT, ls='')
 plt.ylim(-0.001, 0.001)
@@ -89,7 +93,7 @@ plt.title("Fourier Transform")
 fig = matplotlib.pyplot.gcf()
 fig.set_size_inches(15, 8)
 plt.savefig("graphs/Second_look_Fourier.png", dpi=500)
-plt.show()
+#plt.show()
 
 plt.errorbar(p_s, mean_LT, std_LT, ls='')
 plt.ylim(-0.001, 0.001)
@@ -98,7 +102,7 @@ plt.title("Laplace Transform")
 fig = matplotlib.pyplot.gcf()
 fig.set_size_inches(15, 8)
 plt.savefig("graphs/Second_look_Laplace.png", dpi=500)
-plt.show()
+#plt.show()
 
 plt.errorbar(p_s, mean_sum, std_sum, ls='')
 plt.ylim(-0.001, 0.001)
@@ -107,4 +111,44 @@ plt.title("Sum")
 fig = matplotlib.pyplot.gcf()
 fig.set_size_inches(15, 8)
 plt.savefig("graphs/Second_look_Sum.png", dpi=500)
-plt.show()
+#plt.show()
+
+
+# Find how far the sum can be treated as a constant
+p_s = []
+i_start = 4
+i = i_start
+p = 1
+
+while p > 10 ** -10 and i < L:
+    lower = 1
+    upper = i
+    data = combined[:, lower: upper]
+    cov = numpy.cov(data.T)
+    cov_1_2 = numpy.linalg.cholesky(cov)
+    cov_inv = numpy.linalg.inv(cov_1_2)
+
+    def chisq(x):
+        a, b = x
+        cov = numpy.cov(data)
+
+        residuals = numpy.mean(data, axis=0) - a - b ** 4
+
+        normalized_residuals = numpy.dot(cov_inv, residuals)
+
+        return numpy.sum(normalized_residuals ** 2)
+
+    def chisq_pvalue(k, x):
+        return gammaincc(k / 2, x / 2)
+
+    res = least_squares(chisq, [0, 0])
+
+    chisq_result = chisq(res.x)
+
+    p = chisq_pvalue(upper - lower - 1, chisq_result)
+
+    i += 1
+
+    p_s.append(p)
+
+p_s = numpy.array(p_s)
