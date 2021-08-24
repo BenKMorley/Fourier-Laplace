@@ -75,29 +75,41 @@ q1_s = numpy.arange(L).reshape((1, L, 1)).repeat(L, axis=0).repeat(L, axis=2) * 
 q2_s = numpy.arange(L).reshape((1, 1, L)).repeat(L, axis=1).repeat(L, axis=0) * q_fac
 
 
-def analysis(params):
-    ## Analysis
+def gen_data(params, dim=3, rerun=False, offsets=range(10)):
+    q_tuple = []  # start as list to append
+    for i in range(dim):
+        q_part = numpy.arange(L).reshape((1, ) * i + (L, ) + (1, ) * (dim - i - 1)) * q_fac
+        for j in range(dim - 1):
+            q_part.repeat(L, axis=i)
+
+        q_tuple.append(q_part)
+
     alpha, beta, gamma, eps = params
 
-    data_q_3D = analytic((q0_s, q1_s, q2_s), g, alpha, beta, gamma)
+    data_q = analytic(q_tuple, g, alpha, beta, gamma)
 
     data_q_FT = numpy.zeros((no_samples, L))
     data_q_LT = numpy.zeros((len(offsets), no_samples, L))
+    data_x_FT = numpy.zeros((no_samples, L))
+    data_x_LT = numpy.zeros((len(offsets), no_samples, L), dtype=numpy.complex128)
     data_x_sum = numpy.zeros((len(offsets), no_samples, L), dtype=numpy.complex128)
 
-    try:
-        data_full = pickle.load(open(f"data/fake_data/alpha{alpha}_beta{beta}_gamma{gamma}_eps{eps}_samples{no_samples}.pcl", "rb"))
-        data_q_FT, data_q_LT, data_x_sum = data_full
+    if not rerun:
+        try:
+            data_full = pickle.load(open(f"data/fake_data/alpha{alpha}_beta{beta}_gamma{gamma}_eps{eps}_samples{no_samples}.pcl", "rb"))
 
-    except Exception:
+        except Exception:
+            rerun = True
+
+    if rerun:
         for i in tqdm(range(no_samples)):
-            noise = eps * numpy.random.randn(L, L, L)
+            noise = eps * numpy.random.randn(*(L, ) * dim)
 
-            data_q = data_q_3D + noise
+            data_q = data_q + noise
 
             data_x = fftn(data_q).real
 
-            data_x_1D = numpy.mean(data_x, axis=(1, 2))
+            data_x_1D = numpy.mean(data_x, axis=tuple(range(1, dim)))
 
             data_q_FT[i] = fftn(data_x_1D).real
 
@@ -105,16 +117,31 @@ def analysis(params):
                 data_q_LT[j, i] = Laplace_Transform_1D(data_x_1D, offset=offset)
 
                 # Have a look in x-space of the IFT of FT + LT
-                data_x_sum[j, i] = ifftn(data_q_FT[i] + data_q_LT[j, i])
+                data_x_LT[j, i] = ifftn(data_q_LT[j, i])
+                data_x_FT[i] = ifftn(data_q_FT[i])
 
-        data_full = data_q_FT, data_q_LT, data_x_sum
+                data_x_sum[j, i] = data_x_LT[j, i] + data_x_FT[i]
+
+        data_full = data_q_FT, data_q_LT, data_x_FT, data_x_LT, data_x_sum
+
         pickle.dump(data_full, open(f"data/fake_data/alpha{alpha}_beta{beta}_gamma{gamma}_eps{eps}_samples{no_samples}.pcl", "wb"))
 
     q_s = numpy.arange(L) * q_fac
 
     data_x_1D = ifftn(data_q_FT, axes=(1, )).real
 
-    ## Plotting
+    return data_full, params
+
+
+def plotting(data):  # data assumed to be the form of what is returned by analysis
+    data_full, params = data
+    alpha, beta, gamma, eps = params
+    data_q_FT, data_q_LT, data_x_FT, data_x_LT, data_x_sum = data_full
+
+    q_s = numpy.arange(L) * q_fac
+
+    data_x_1D = ifftn(data_q_FT, axes=(1, )).real
+
     av = numpy.roll(numpy.mean(data_x_1D, axis=0), 2)[:show_to + 2]
     std = numpy.roll(numpy.std(data_x_1D, axis=0), 2)[:show_to + 2]
     plt.fill_between(numpy.arange(-2, L)[:show_to + 2] / g, av - std, av + std)
@@ -137,7 +164,7 @@ def analysis(params):
         av = numpy.mean(data_q_LT[j], axis=0)[1:show_to]
         std = numpy.std(data_q_LT[j], axis=0)[1:show_to]
         plt.fill_between(q_s[1:show_to] / g, av - std, av + std,
-                         label=f'offset={offset}', color='b', alpha=0.2)
+                        label=f'offset={offset}', color='b', alpha=0.2)
         plt.plot(q_s[1:show_to] / g, av, color='b', alpha=0.2, label='LT')
 
         av = numpy.mean(data_q_FT + data_q_LT[numpy.argwhere(offsets == offset)[0, 0]], axis=0)[1:show_to]
@@ -152,14 +179,14 @@ def analysis(params):
         plt.clf()
 
         gradient1, intercept1 = numpy.polyfit(numpy.log(q_s[show_to // 3:show_to] / g),
-                                              numpy.log(numpy.abs(numpy.mean(data_q_FT, axis=0)[show_to // 3:show_to])),
-                                              1)
+                                            numpy.log(numpy.abs(numpy.mean(data_q_FT, axis=0)[show_to // 3:show_to])),
+                                            1)
         gradient2, intercept2 = numpy.polyfit(numpy.log(q_s[show_to // 3:show_to] / g),
-                                              numpy.log(numpy.abs(numpy.mean(data_q_LT[j], axis=0)[show_to // 3:show_to])),
-                                              1)
+                                            numpy.log(numpy.abs(numpy.mean(data_q_LT[j], axis=0)[show_to // 3:show_to])),
+                                            1)
         gradient3, intercept3 = numpy.polyfit(numpy.log(q_s[show_to // 3:show_to] / g),
-                                              numpy.log(numpy.abs(numpy.mean(data_q_LT[numpy.argwhere(offsets == offset)[0, 0]] + data_q_FT, axis=0)[show_to // 3:show_to])),
-                                              1)
+                                            numpy.log(numpy.abs(numpy.mean(data_q_LT[numpy.argwhere(offsets == offset)[0, 0]] + data_q_FT, axis=0)[show_to // 3:show_to])),
+                                            1)
 
         av = numpy.abs(numpy.mean(data_q_FT, axis=0)[1:show_to])
         std = numpy.std(data_q_FT, axis=0)[1:show_to]
@@ -173,7 +200,7 @@ def analysis(params):
         av = numpy.abs(numpy.mean(data_q_LT[j], axis=0)[1:show_to])
         std = numpy.std(data_q_LT[j], axis=0)[1:show_to]
         plt.fill_between(q_s[1:show_to] / g, av - std, av + std,
-                         label=f'offset={offset}', color='b', alpha=0.2)
+                        label=f'offset={offset}', color='b', alpha=0.2)
         plt.plot(q_s[1:show_to] / g, av, color='b', alpha=0.2, label=f'|LT|')
 
         av = numpy.abs(numpy.mean(data_q_FT + data_q_LT[numpy.argwhere(offsets == offset)[0, 0]], axis=0)[1:show_to])
@@ -195,10 +222,10 @@ def analysis(params):
         av = numpy.mean(data_x_sum[j], axis=0)[1:show_to]
         std = numpy.std(data_x_sum[j], axis=0)[1:show_to]
         plt.fill_between(q_s[1:show_to] / g, (av - std).real, (av + std).real,
-                         label='real', color='k')
+                        label='real', color='k')
         plt.plot(q_s[1:show_to] / g, av.real, color='k')
         plt.fill_between(q_s[1:show_to] / g, (av - std).imag, (av + std).imag,
-                         label='imag', color='r')
+                        label='imag', color='r')
         plt.plot(q_s[1:show_to] / g, av.imag, color='r')
         plt.xlabel('x a')
         plt.legend()
@@ -255,11 +282,3 @@ def analysis_ND_Laplace(params, dim=3):
 
 
 params = [[1, 0, 0, 0.1], [0, 1, 0, 0.1], [0, 0, 1, 0.1], [1, 1, 0.1, 0.1]]
-
-
-# analysis_ND_Laplace(params[2], dim=1)
-
-# analysis(params[2])
-
-p = Pool(4)
-p.map(analysis, params)
