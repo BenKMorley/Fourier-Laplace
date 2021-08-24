@@ -17,10 +17,17 @@ g = 0.1
 
 
 ## Define the expected q dependence function
-def analytic(q_s, g, alpha, beta, gamma):
-    q_hat = []
-    L = q_s[0].shape[0]
-    dim = len(q_s)
+def analytic(L, dim, g, alpha, beta, gamma):
+    q_s = []  # start as list to append
+    q_fac = 2 * numpy.pi / L
+
+    for i in range(dim):
+        q_part = numpy.arange(L).reshape((1, ) * i + (L, ) + (1, ) * (dim - i - 1)) * q_fac
+        for j in range(dim - 1):
+            q_part.repeat(L, axis=i)
+
+        q_s.append(q_part)
+
     q_sq = numpy.zeros((L, ) * dim)
 
     for d in range(dim):
@@ -70,19 +77,8 @@ def Laplace_Transform_ND(data, dim, offset):
     return data
 
 
-q0_s = numpy.arange(L).reshape((L, 1, 1)).repeat(L, axis=1).repeat(L, axis=2) * q_fac
-q1_s = numpy.arange(L).reshape((1, L, 1)).repeat(L, axis=0).repeat(L, axis=2) * q_fac
-q2_s = numpy.arange(L).reshape((1, 1, L)).repeat(L, axis=1).repeat(L, axis=0) * q_fac
-
-
 def gen_data(params, dim=3, rerun=False, offsets=range(10)):
-    q_tuple = []  # start as list to append
-    for i in range(dim):
-        q_part = numpy.arange(L).reshape((1, ) * i + (L, ) + (1, ) * (dim - i - 1)) * q_fac
-        for j in range(dim - 1):
-            q_part.repeat(L, axis=i)
 
-        q_tuple.append(q_part)
 
     alpha, beta, gamma, eps = params
 
@@ -279,6 +275,25 @@ def analysis_ND_Laplace(params, dim=3):
         data_q_LT2[i] = Laplace_Transform_1D(data_x)
 
         print("Hello")
+
+
+def Fourier_to_Laplace_analytic(f_p, r=1):
+    """
+        f_p is the momentum space evaluation of the function over a comb of
+        values.
+    """
+    L = len(f_p)
+    p_s = numpy.arange(L)
+
+    def A(p, q):
+        return numpy.exp(2 * numpy.pi / L * (q - 1j * p))
+
+    results = numpy.zeros(L)
+
+    for q in range(L):
+        results[q] = numpy.mean(f_p * A(p_s, q) ** r / (1 - A(p_s, q) ** -1))
+
+    return results
 
 
 params = [[1, 0, 0, 0.1], [0, 1, 0, 0.1], [0, 0, 1, 0.1], [1, 1, 0.1, 0.1]]

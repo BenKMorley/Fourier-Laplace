@@ -10,39 +10,58 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       158,          7]
-NotebookDataLength[     18971,        655]
-NotebookOptionsPosition[     17459,        622]
-NotebookOutlinePosition[     17851,        638]
-CellTagsIndexPosition[     17808,        635]
+NotebookDataLength[     20922,        687]
+NotebookOptionsPosition[     19191,        650]
+NotebookOutlinePosition[     19582,        666]
+CellTagsIndexPosition[     19539,        663]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
 Notebook[{
-Cell[BoxData[
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"A", "[", 
+   RowBox[{"q_", ",", " ", "p_", ",", " ", "n_"}], "]"}], ":=", " ", 
+  RowBox[{"Exp", "[", 
+   RowBox[{
+    RowBox[{"+", "2"}], " ", "*", " ", "Pi", " ", "*", " ", 
+    RowBox[{
+     RowBox[{"(", 
+      RowBox[{"q", " ", "-", " ", 
+       RowBox[{"I", " ", "*", " ", "p"}]}], ")"}], "/", "n"}]}], 
+   "]"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"fF", "[", 
+   RowBox[{"p_", ",", " ", "n_"}], "]"}], " ", ":=", " ", 
+  RowBox[{
+   RowBox[{"(", 
+    RowBox[{"2", " ", "*", " ", 
+     RowBox[{"Sin", "[", 
+      RowBox[{"Pi", " ", "*", " ", 
+       RowBox[{"p", " ", "/", " ", "n"}]}], "]"}]}], ")"}], "^", 
+   "2"}]}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{"f", "[", 
-   RowBox[{"p_", ",", " ", "q_", ",", " ", "n_"}], "]"}], ":=", 
+   RowBox[{"p_", ",", " ", "q_", ",", " ", "n_", ",", " ", "r_"}], "]"}], ":=", 
   RowBox[{
+   RowBox[{"fF", "[", 
+    RowBox[{"p", ",", " ", "n"}], "]"}], "*", " ", 
    RowBox[{
-    RowBox[{"Sin", "[", 
-     RowBox[{"Pi", " ", "*", " ", 
-      RowBox[{"p", "/", "n"}]}], "]"}], "^", "3"}], " ", "*", " ", 
-   RowBox[{
-    RowBox[{"(", 
-     RowBox[{"Exp", "[", 
-      RowBox[{
-       RowBox[{"-", "2"}], " ", "Pi", " ", "*", " ", "I", " ", "*", " ", 
-       "p"}], " ", "]"}], ")"}], "/", " ", 
+    RowBox[{
+     RowBox[{"A", "[", 
+      RowBox[{"q", ",", " ", "p", ",", " ", "n"}], "]"}], "^", "r"}], "/", 
+    " ", 
     RowBox[{"(", 
      RowBox[{"1", " ", "-", " ", 
-      RowBox[{"Exp", "[", 
-       RowBox[{
-        RowBox[{"-", "2"}], " ", "Pi", " ", 
-        RowBox[{"(", 
-         RowBox[{"q", " ", "-", " ", 
-          RowBox[{"I", " ", "*", " ", "p"}]}], ")"}]}], " ", "]"}]}], 
-     ")"}]}]}]}]], "Input",
- CellLabel->"In[1]:=",ExpressionUUID->"767bbeec-072b-4dae-a3fd-0dec8fdefdfa"],
+      RowBox[{
+       RowBox[{"A", "[", 
+        RowBox[{"q", ",", " ", "p", ",", " ", "n"}], "]"}], "^", 
+       RowBox[{"-", "1"}]}]}], ")"}]}]}]}]}], "Input",
+ CellChangeTimes->{{3.838800384326798*^9, 3.838800432011139*^9}, {
+  3.838801163984907*^9, 3.838801301764371*^9}, {3.838801340026627*^9, 
+  3.838801415577661*^9}, {3.838801596739867*^9, 3.838801596817226*^9}, {
+  3.838805814580405*^9, 3.8388058217063713`*^9}},
+ CellLabel->"In[83]:=",ExpressionUUID->"767bbeec-072b-4dae-a3fd-0dec8fdefdfa"],
 
 Cell[BoxData[
  RowBox[{
@@ -50,15 +69,20 @@ Cell[BoxData[
    RowBox[{"q_", ",", " ", "n_"}], "]"}], ":=", 
   RowBox[{"Evaluate", "[", 
    RowBox[{"FullSimplify", "[", 
-    RowBox[{"Sum", "[", 
-     RowBox[{
-      RowBox[{"f", "[", 
-       RowBox[{"p", ",", " ", "q", ",", " ", "n"}], "]"}], ",", 
-      RowBox[{"{", 
-       RowBox[{"p", ",", " ", "0", ",", " ", 
-        RowBox[{"n", "-", "1"}]}], "}"}]}], "]"}], "]"}], "]"}]}]], "Input",
- CellChangeTimes->{{3.838797236245833*^9, 3.838797240532815*^9}},
- CellLabel->"In[5]:=",ExpressionUUID->"93a1468c-c700-4c1c-9442-674bc36a199d"],
+    RowBox[{
+     RowBox[{"Sum", "[", 
+      RowBox[{
+       RowBox[{"f", "[", 
+        RowBox[{"p", ",", " ", "q", ",", " ", "n", ",", " ", "1"}], "]"}], 
+       ",", 
+       RowBox[{"{", 
+        RowBox[{"p", ",", " ", "0", ",", " ", 
+         RowBox[{"n", "-", "1"}]}], "}"}]}], "]"}], " ", "/", " ", "n"}], 
+    "]"}], "]"}]}]], "Input",
+ CellChangeTimes->{{3.838797236245833*^9, 3.838797240532815*^9}, {
+  3.83880135764301*^9, 3.838801357929351*^9}, {3.838807919130478*^9, 
+  3.838807940310058*^9}},
+ CellLabel->"In[90]:=",ExpressionUUID->"93a1468c-c700-4c1c-9442-674bc36a199d"],
 
 Cell[CellGroupData[{
 
@@ -66,57 +90,60 @@ Cell[BoxData[
  RowBox[{"g", "[", 
   RowBox[{"q", ",", " ", "n"}], "]"}]], "Input",
  CellChangeTimes->{{3.838797090516013*^9, 3.838797092713539*^9}},
- CellLabel->"In[6]:=",ExpressionUUID->"b65f0b5b-45d4-42cf-b44c-3928258ce80e"],
+ CellLabel->"In[86]:=",ExpressionUUID->"b65f0b5b-45d4-42cf-b44c-3928258ce80e"],
 
 Cell[BoxData[
  RowBox[{
-  FractionBox["1", "16"], " ", 
-  SuperscriptBox["\[ExponentialE]", 
-   RowBox[{"2", " ", "\[Pi]", " ", "q"}]], " ", 
-  RowBox[{"(", 
+  UnderoverscriptBox["\[Sum]", 
+   RowBox[{"p", "=", "0"}], 
    RowBox[{
-    FractionBox[
-     RowBox[{"3", " ", "\[ImaginaryI]", " ", 
-      RowBox[{"(", 
-       RowBox[{"1", "+", 
-        SuperscriptBox["\[ExponentialE]", 
-         FractionBox[
-          RowBox[{"\[ImaginaryI]", " ", "\[Pi]"}], "n"]], "-", 
-        SuperscriptBox["\[ExponentialE]", 
-         FractionBox[
-          RowBox[{"\[ImaginaryI]", " ", 
-           RowBox[{"(", 
-            RowBox[{"1", "-", 
-             RowBox[{"4", " ", "n"}]}], ")"}], " ", "\[Pi]", " ", 
-           RowBox[{"Floor", "[", "n", "]"}]}], "n"]], "-", 
-        SuperscriptBox["\[ExponentialE]", 
-         RowBox[{"-", 
-          FractionBox[
-           RowBox[{"\[ImaginaryI]", " ", "\[Pi]", " ", 
-            RowBox[{"(", 
-             RowBox[{
-              RowBox[{"-", "1"}], "+", 
-              RowBox[{"Floor", "[", "n", "]"}], "+", 
-              RowBox[{"4", " ", "n", " ", 
-               RowBox[{"Floor", "[", "n", "]"}]}]}], ")"}]}], "n"]}]]}], 
-       ")"}]}], 
-     RowBox[{
-      RowBox[{"-", "1"}], "+", 
-      SuperscriptBox["\[ExponentialE]", 
-       FractionBox[
-        RowBox[{"\[ImaginaryI]", " ", "\[Pi]"}], "n"]]}]], "-", 
-    RowBox[{"2", " ", 
-     RowBox[{"Cot", "[", 
+    RowBox[{"-", "1"}], "+", "n"}]], 
+  FractionBox[
+   RowBox[{"4", " ", 
+    SuperscriptBox["\[ExponentialE]", 
+     FractionBox[
+      RowBox[{"2", " ", "\[Pi]", " ", 
+       RowBox[{"(", 
+        RowBox[{
+         RowBox[{
+          RowBox[{"-", "\[ImaginaryI]"}], " ", "p"}], "+", "q"}], ")"}]}], 
+      "n"]], " ", 
+    SuperscriptBox[
+     RowBox[{"Sin", "[", 
       FractionBox[
-       RowBox[{"3", " ", "\[Pi]"}], 
-       RowBox[{"2", " ", "n"}]], "]"}]}]}], ")"}], " ", 
-  RowBox[{"(", 
-   RowBox[{
-    RowBox[{"-", "1"}], "+", 
-    RowBox[{"Coth", "[", 
-     RowBox[{"\[Pi]", " ", "q"}], "]"}]}], ")"}]}]], "Output",
- CellChangeTimes->{3.838797096614122*^9, 3.838797246233482*^9},
- CellLabel->"Out[6]=",ExpressionUUID->"6becbbd6-076a-45e5-870f-d90854bdc338"]
+       RowBox[{"p", " ", "\[Pi]"}], "n"], "]"}], "2"]}], 
+   RowBox[{"1", "-", 
+    SuperscriptBox["\[ExponentialE]", 
+     RowBox[{"-", 
+      FractionBox[
+       RowBox[{"2", " ", "\[Pi]", " ", 
+        RowBox[{"(", 
+         RowBox[{
+          RowBox[{
+           RowBox[{"-", "\[ImaginaryI]"}], " ", "p"}], "+", "q"}], ")"}]}], 
+       "n"]}]]}]]}]], "Output",
+ CellChangeTimes->{
+  3.838797096614122*^9, 3.838797246233482*^9, {3.838801363391286*^9, 
+   3.838801408622184*^9}, 3.8388015535331173`*^9, 3.838805986568261*^9},
+ CellLabel->"Out[86]=",ExpressionUUID->"c21afadd-e94a-46bd-bcaa-ca1fb390f34d"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"N", "[", 
+  RowBox[{"g", "[", 
+   RowBox[{"1", ",", " ", "32"}], "]"}], "]"}]], "Input",
+ CellChangeTimes->{{3.838807869982479*^9, 3.838807883567245*^9}},
+ CellLabel->"In[91]:=",ExpressionUUID->"5744f97f-3f49-486f-9d17-c3d01a7a4b54"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"-", "0.03874952606231952`"}], "+", 
+  RowBox[{"0.`", " ", "\[ImaginaryI]"}]}]], "Output",
+ CellChangeTimes->{{3.838807875858103*^9, 3.838807883822673*^9}, 
+   3.838807944998432*^9},
+ CellLabel->"Out[91]=",ExpressionUUID->"1046f492-ac69-4bf5-b5a4-ef9cae599453"]
 }, Open  ]],
 
 Cell[CellGroupData[{
@@ -125,13 +152,13 @@ Cell[BoxData[
  RowBox[{"results", " ", "=", " ", 
   RowBox[{"List", "[", "]"}]}]], "Input",
  CellChangeTimes->{{3.838797252759951*^9, 3.838797276061966*^9}},
- CellLabel->"In[25]:=",ExpressionUUID->"30cc38bf-3c70-43d5-9c66-c1a57446bd81"],
+ CellLabel->"In[92]:=",ExpressionUUID->"30cc38bf-3c70-43d5-9c66-c1a57446bd81"],
 
 Cell[BoxData[
  RowBox[{"{", "}"}]], "Output",
  CellChangeTimes->{3.838797276814152*^9, 3.838797408203329*^9, 
-  3.838799094994998*^9},
- CellLabel->"Out[25]=",ExpressionUUID->"7b088d83-5f68-4f5a-949d-fa17cd62bac7"]
+  3.838799094994998*^9, 3.838801574704465*^9, 3.838808433164995*^9},
+ CellLabel->"Out[92]=",ExpressionUUID->"35aaa9f9-9a70-44df-82fb-0c495464bc93"]
 }, Open  ]],
 
 Cell[BoxData[
@@ -149,7 +176,7 @@ Cell[BoxData[
  CellChangeTimes->{{3.8387971129176283`*^9, 3.838797112966444*^9}, {
    3.838797258284759*^9, 3.838797262491662*^9}, 3.8387974066237593`*^9, {
    3.838799083323512*^9, 3.838799091226056*^9}},
- CellLabel->"In[26]:=",ExpressionUUID->"923e39cb-0972-409c-b379-b89e17c310b3"],
+ CellLabel->"In[93]:=",ExpressionUUID->"923e39cb-0972-409c-b379-b89e17c310b3"],
 
 Cell[CellGroupData[{
 
@@ -157,7 +184,7 @@ Cell[BoxData[
  RowBox[{"N", "[", "results", "]"}]], "Input",
  CellChangeTimes->{{3.8387972861412497`*^9, 3.8387972866983747`*^9}, {
    3.838799098441896*^9, 3.838799124504414*^9}, 3.838799494501598*^9},
- CellLabel->"In[41]:=",ExpressionUUID->"c6245b89-52a0-4cca-87aa-f2d94470747b"],
+ CellLabel->"In[94]:=",ExpressionUUID->"c6245b89-52a0-4cca-87aa-f2d94470747b"],
 
 Cell[BoxData[
  RowBox[{"{", 
@@ -165,93 +192,9 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"13.6066\"\>",
+      StyleBox["\<\"-0.0387495\"\>",
        ShowStringCharacters->False],
-      13.606647251900279`,
-      AutoDelete->True], "+", 
-     RowBox[{
-      InterpretationBox[
-       StyleBox["\<\"0.00000000000000756364\"\>",
-        ShowStringCharacters->False],
-       7.563641234299392*^-15,
-       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
-    DecimalForm], ",", 
-   TagBox[
-    RowBox[{
-     InterpretationBox[
-      StyleBox["\<\"13.5813\"\>",
-       ShowStringCharacters->False],
-      13.581284980055303`,
-      AutoDelete->True], "+", 
-     RowBox[{
-      InterpretationBox[
-       StyleBox["\<\"0.00000000000000754954\"\>",
-        ShowStringCharacters->False],
-       7.549542895335297*^-15,
-       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
-    DecimalForm], ",", 
-   TagBox[
-    RowBox[{
-     InterpretationBox[
-      StyleBox["\<\"13.5812\"\>",
-       ShowStringCharacters->False],
-      13.58123767789357,
-      AutoDelete->True], "+", 
-     RowBox[{
-      InterpretationBox[
-       StyleBox["\<\"0.00000000000000754952\"\>",
-        ShowStringCharacters->False],
-       7.549516601085556*^-15,
-       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
-    DecimalForm], ",", 
-   TagBox[
-    RowBox[{
-     InterpretationBox[
-      StyleBox["\<\"13.5813\"\>",
-       ShowStringCharacters->False],
-      13.581291608112508`,
-      AutoDelete->True], "+", 
-     RowBox[{
-      InterpretationBox[
-       StyleBox["\<\"0.00000000000000754955\"\>",
-        ShowStringCharacters->False],
-       7.549546579729095*^-15,
-       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
-    DecimalForm], ",", 
-   TagBox[
-    RowBox[{
-     InterpretationBox[
-      StyleBox["\<\"13.6103\"\>",
-       ShowStringCharacters->False],
-      13.610277401503676`,
-      AutoDelete->True], "+", 
-     RowBox[{
-      InterpretationBox[
-       StyleBox["\<\"0.00000000000000756566\"\>",
-        ShowStringCharacters->False],
-       7.56565915603416*^-15,
-       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
-    DecimalForm], ",", 
-   TagBox[
-    RowBox[{
-     InterpretationBox[
-      StyleBox["\<\"35.5521\"\>",
-       ShowStringCharacters->False],
-      35.55214623357315,
-      AutoDelete->True], "+", 
-     RowBox[{
-      InterpretationBox[
-       StyleBox["\<\"0.0000000000000197627\"\>",
-        ShowStringCharacters->False],
-       1.9762669983418663`*^-14,
-       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
-    DecimalForm], ",", 
-   TagBox[
-    RowBox[{
-     InterpretationBox[
-      StyleBox["\<\"0.\"\>",
-       ShowStringCharacters->False],
-      0.,
+      -0.03874952606231952,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -263,9 +206,9 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-0.156205\"\>",
        ShowStringCharacters->False],
-      0.,
+      -0.15620512188642477`,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -277,9 +220,23 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-0.357128\"\>",
        ShowStringCharacters->False],
-      0.,
+      -0.3571278701348527,
+      AutoDelete->True], "-", 
+     RowBox[{
+      InterpretationBox[
+       StyleBox["\<\"0.0000000000000000138778\"\>",
+        ShowStringCharacters->False],
+       1.3877787807814457`*^-17,
+       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
+    DecimalForm], ",", 
+   TagBox[
+    RowBox[{
+     InterpretationBox[
+      StyleBox["\<\"-0.649218\"\>",
+       ShowStringCharacters->False],
+      -0.6492181785119068,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -291,9 +248,23 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-1.04377\"\>",
        ShowStringCharacters->False],
-      0.,
+      -1.0437727339461185`,
+      AutoDelete->True], "+", 
+     RowBox[{
+      InterpretationBox[
+       StyleBox["\<\"0.0000000000000000277556\"\>",
+        ShowStringCharacters->False],
+       2.7755575615628914`*^-17,
+       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
+    DecimalForm], ",", 
+   TagBox[
+    RowBox[{
+     InterpretationBox[
+      StyleBox["\<\"-1.55605\"\>",
+       ShowStringCharacters->False],
+      -1.5560517852022224`,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -305,9 +276,23 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-2.20587\"\>",
        ShowStringCharacters->False],
-      0.,
+      -2.205868832916722,
+      AutoDelete->True], "+", 
+     RowBox[{
+      InterpretationBox[
+       StyleBox["\<\"0.0000000000000000555112\"\>",
+        ShowStringCharacters->False],
+       5.551115123125783*^-17,
+       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
+    DecimalForm], ",", 
+   TagBox[
+    RowBox[{
+     InterpretationBox[
+      StyleBox["\<\"-3.01836\"\>",
+       ShowStringCharacters->False],
+      -3.0183569573161133`,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -319,9 +304,23 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-4.02494\"\>",
        ShowStringCharacters->False],
-      0.,
+      -4.024940894463331,
+      AutoDelete->True], "+", 
+     RowBox[{
+      InterpretationBox[
+       StyleBox["\<\"0.0000000000000000555112\"\>",
+        ShowStringCharacters->False],
+       5.551115123125783*^-17,
+       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
+    DecimalForm], ",", 
+   TagBox[
+    RowBox[{
+     InterpretationBox[
+      StyleBox["\<\"-5.26455\"\>",
+       ShowStringCharacters->False],
+      -5.264552455913684,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -333,9 +332,9 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-6.78514\"\>",
        ShowStringCharacters->False],
-      0.,
+      -6.7851363007573395`,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -347,9 +346,9 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-8.6455\"\>",
        ShowStringCharacters->False],
-      0.,
+      -8.645504299039914,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -361,9 +360,9 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-10.9176\"\>",
        ShowStringCharacters->False],
-      0.,
+      -10.917610208078385`,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -375,9 +374,9 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-13.6893\"\>",
        ShowStringCharacters->False],
-      0.,
+      -13.689332639700272`,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -389,9 +388,9 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-17.0679\"\>",
        ShowStringCharacters->False],
-      0.,
+      -17.067873955685116`,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -403,9 +402,9 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-21.1839\"\>",
        ShowStringCharacters->False],
-      0.,
+      -21.183906551043037`,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -417,9 +416,9 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-26.1966\"\>",
        ShowStringCharacters->False],
-      0.,
+      -26.19662689160692,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -431,9 +430,9 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-32.2999\"\>",
        ShowStringCharacters->False],
-      0.,
+      -32.2999127817766,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -445,9 +444,9 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-39.7298\"\>",
        ShowStringCharacters->False],
-      0.,
+      -39.72982200806686,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -459,9 +458,9 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-48.7737\"\>",
        ShowStringCharacters->False],
-      0.,
+      -48.773722384721545`,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -473,9 +472,9 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-59.7814\"\>",
        ShowStringCharacters->False],
-      0.,
+      -59.78140632566172,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -487,9 +486,9 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-73.1786\"\>",
        ShowStringCharacters->False],
-      0.,
+      -73.17861982288439,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -501,9 +500,51 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-89.4835\"\>",
        ShowStringCharacters->False],
-      0.,
+      -89.48352909382238,
+      AutoDelete->True], "-", 
+     RowBox[{
+      InterpretationBox[
+       StyleBox["\<\"0.000000000000000888178\"\>",
+        ShowStringCharacters->False],
+       8.881784197001252*^-16,
+       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
+    DecimalForm], ",", 
+   TagBox[
+    RowBox[{
+     InterpretationBox[
+      StyleBox["\<\"-109.327\"\>",
+       ShowStringCharacters->False],
+      -109.32676178087733`,
+      AutoDelete->True], "+", 
+     RowBox[{
+      InterpretationBox[
+       StyleBox["\<\"0.00000000000000177636\"\>",
+        ShowStringCharacters->False],
+       1.7763568394002505`*^-15,
+       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
+    DecimalForm], ",", 
+   TagBox[
+    RowBox[{
+     InterpretationBox[
+      StyleBox["\<\"-133.476\"\>",
+       ShowStringCharacters->False],
+      -133.47579783987885`,
+      AutoDelete->True], "-", 
+     RowBox[{
+      InterpretationBox[
+       StyleBox["\<\"0.00000000000000177636\"\>",
+        ShowStringCharacters->False],
+       1.7763568394002505`*^-15,
+       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
+    DecimalForm], ",", 
+   TagBox[
+    RowBox[{
+     InterpretationBox[
+      StyleBox["\<\"-162.865\"\>",
+       ShowStringCharacters->False],
+      -162.8646534878509,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -515,9 +556,51 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-198.63\"\>",
        ShowStringCharacters->False],
-      0.,
+      -198.63000630098804`,
+      AutoDelete->True], "+", 
+     RowBox[{
+      InterpretationBox[
+       StyleBox["\<\"0.00000000000000177636\"\>",
+        ShowStringCharacters->False],
+       1.7763568394002505`*^-15,
+       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
+    DecimalForm], ",", 
+   TagBox[
+    RowBox[{
+     InterpretationBox[
+      StyleBox["\<\"-242.155\"\>",
+       ShowStringCharacters->False],
+      -242.15515867916434`,
+      AutoDelete->True], "-", 
+     RowBox[{
+      InterpretationBox[
+       StyleBox["\<\"0.00000000000000355271\"\>",
+        ShowStringCharacters->False],
+       3.552713678800501*^-15,
+       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
+    DecimalForm], ",", 
+   TagBox[
+    RowBox[{
+     InterpretationBox[
+      StyleBox["\<\"-295.124\"\>",
+       ShowStringCharacters->False],
+      -295.1235400590798,
+      AutoDelete->True], "-", 
+     RowBox[{
+      InterpretationBox[
+       StyleBox["\<\"0.00000000000000355271\"\>",
+        ShowStringCharacters->False],
+       3.552713678800501*^-15,
+       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
+    DecimalForm], ",", 
+   TagBox[
+    RowBox[{
+     InterpretationBox[
+      StyleBox["\<\"-359.584\"\>",
+       ShowStringCharacters->False],
+      -359.5838171898946,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -529,65 +612,9 @@ Cell[BoxData[
    TagBox[
     RowBox[{
      InterpretationBox[
-      StyleBox["\<\"0.\"\>",
+      StyleBox["\<\"-438.029\"\>",
        ShowStringCharacters->False],
-      0.,
-      AutoDelete->True], "+", 
-     RowBox[{
-      InterpretationBox[
-       StyleBox["\<\"0.\"\>",
-        ShowStringCharacters->False],
-       0.,
-       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
-    DecimalForm], ",", 
-   TagBox[
-    RowBox[{
-     InterpretationBox[
-      StyleBox["\<\"0.\"\>",
-       ShowStringCharacters->False],
-      0.,
-      AutoDelete->True], "+", 
-     RowBox[{
-      InterpretationBox[
-       StyleBox["\<\"0.\"\>",
-        ShowStringCharacters->False],
-       0.,
-       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
-    DecimalForm], ",", 
-   TagBox[
-    RowBox[{
-     InterpretationBox[
-      StyleBox["\<\"0.\"\>",
-       ShowStringCharacters->False],
-      0.,
-      AutoDelete->True], "+", 
-     RowBox[{
-      InterpretationBox[
-       StyleBox["\<\"0.\"\>",
-        ShowStringCharacters->False],
-       0.,
-       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
-    DecimalForm], ",", 
-   TagBox[
-    RowBox[{
-     InterpretationBox[
-      StyleBox["\<\"0.\"\>",
-       ShowStringCharacters->False],
-      0.,
-      AutoDelete->True], "+", 
-     RowBox[{
-      InterpretationBox[
-       StyleBox["\<\"0.\"\>",
-        ShowStringCharacters->False],
-       0.,
-       AutoDelete->True], " ", "\[ImaginaryI]"}]}],
-    DecimalForm], ",", 
-   TagBox[
-    RowBox[{
-     InterpretationBox[
-      StyleBox["\<\"0.\"\>",
-       ShowStringCharacters->False],
-      0.,
+      -438.02913075212956`,
       AutoDelete->True], "+", 
      RowBox[{
       InterpretationBox[
@@ -598,8 +625,9 @@ Cell[BoxData[
     DecimalForm]}], "}"}]], "Output",
  CellChangeTimes->{
   3.8387972872646723`*^9, 3.8387974141620827`*^9, {3.838799100453629*^9, 
-   3.83879912476867*^9}, 3.838799495526046*^9},
- CellLabel->"Out[41]=",ExpressionUUID->"31f3ce12-87c9-443f-8916-2b234560f0b5"]
+   3.83879912476867*^9}, 3.838799495526046*^9, 3.838801579834234*^9, 
+   3.8388084412465982`*^9},
+ CellLabel->"Out[94]=",ExpressionUUID->"0f3980f7-6495-4ad4-8ab8-73798099b994"]
 }, Open  ]],
 
 Cell[BoxData[""], "Input",
@@ -621,7 +649,7 @@ Cell[BoxData["0.25`"], "Output",
 }, Open  ]]
 },
 WindowSize->{849, 723},
-WindowMargins->{{Automatic, -1209}, {Automatic, 98}},
+WindowMargins->{{525, Automatic}, {170, Automatic}},
 FrontEndVersion->"12.3 for Linux x86 (64-bit) (May 11, 2021)",
 StyleDefinitions->"Default.nb",
 ExpressionUUID->"4a79e270-95c3-4d31-8d8f-a5dab1297e56"
@@ -637,29 +665,31 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[558, 20, 826, 24, 30, "Input",ExpressionUUID->"767bbeec-072b-4dae-a3fd-0dec8fdefdfa"],
-Cell[1387, 46, 570, 14, 30, "Input",ExpressionUUID->"93a1468c-c700-4c1c-9442-674bc36a199d"],
+Cell[558, 20, 1583, 43, 75, "Input",ExpressionUUID->"767bbeec-072b-4dae-a3fd-0dec8fdefdfa"],
+Cell[2144, 65, 738, 19, 30, "Input",ExpressionUUID->"93a1468c-c700-4c1c-9442-674bc36a199d"],
 Cell[CellGroupData[{
-Cell[1982, 64, 226, 4, 30, "Input",ExpressionUUID->"b65f0b5b-45d4-42cf-b44c-3928258ce80e"],
-Cell[2211, 70, 1740, 48, 110, "Output",ExpressionUUID->"6becbbd6-076a-45e5-870f-d90854bdc338"]
+Cell[2907, 88, 227, 4, 30, "Input",ExpressionUUID->"b65f0b5b-45d4-42cf-b44c-3928258ce80e"],
+Cell[3137, 94, 1090, 33, 74, "Output",ExpressionUUID->"c21afadd-e94a-46bd-bcaa-ca1fb390f34d"]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[3988, 123, 236, 4, 30, "Input",ExpressionUUID->"30cc38bf-3c70-43d5-9c66-c1a57446bd81"],
-Cell[4227, 129, 213, 4, 34, "Output",ExpressionUUID->"7b088d83-5f68-4f5a-949d-fa17cd62bac7"]
+Cell[4264, 132, 257, 5, 30, "Input",ExpressionUUID->"5744f97f-3f49-486f-9d17-c3d01a7a4b54"],
+Cell[4524, 139, 295, 6, 34, "Output",ExpressionUUID->"1046f492-ac69-4bf5-b5a4-ef9cae599453"]
 }, Open  ]],
-Cell[4455, 136, 646, 15, 30, "Input",ExpressionUUID->"923e39cb-0972-409c-b379-b89e17c310b3"],
 Cell[CellGroupData[{
-Cell[5126, 155, 281, 4, 30, "Input",ExpressionUUID->"c6245b89-52a0-4cca-87aa-f2d94470747b"],
-Cell[5410, 161, 11461, 440, 145, "Output",ExpressionUUID->"31f3ce12-87c9-443f-8916-2b234560f0b5"]
+Cell[4856, 150, 236, 4, 30, "Input",ExpressionUUID->"30cc38bf-3c70-43d5-9c66-c1a57446bd81"],
+Cell[5095, 156, 257, 4, 34, "Output",ExpressionUUID->"35aaa9f9-9a70-44df-82fb-0c495464bc93"]
 }, Open  ]],
-Cell[16886, 604, 152, 3, 30, "Input",ExpressionUUID->"0acad22a-241b-4658-81d4-2a99ce8757a9"],
+Cell[5367, 163, 646, 15, 30, "Input",ExpressionUUID->"923e39cb-0972-409c-b379-b89e17c310b3"],
 Cell[CellGroupData[{
-Cell[17063, 611, 222, 4, 30, "Input",ExpressionUUID->"33168bdb-d5b5-4412-a5b0-7b19dc00ae3e"],
-Cell[17288, 617, 155, 2, 34, "Output",ExpressionUUID->"b1c28e15-bfc2-43ca-9ee6-2f5f268d32d6"]
+Cell[6038, 182, 281, 4, 30, "Input",ExpressionUUID->"c6245b89-52a0-4cca-87aa-f2d94470747b"],
+Cell[6322, 188, 12281, 441, 234, "Output",ExpressionUUID->"0f3980f7-6495-4ad4-8ab8-73798099b994"]
+}, Open  ]],
+Cell[18618, 632, 152, 3, 30, "Input",ExpressionUUID->"0acad22a-241b-4658-81d4-2a99ce8757a9"],
+Cell[CellGroupData[{
+Cell[18795, 639, 222, 4, 30, "Input",ExpressionUUID->"33168bdb-d5b5-4412-a5b0-7b19dc00ae3e"],
+Cell[19020, 645, 155, 2, 34, "Output",ExpressionUUID->"b1c28e15-bfc2-43ca-9ee6-2f5f268d32d6"]
 }, Open  ]]
 }
 ]
 *)
-
-(* End of internal cache information *)
 
