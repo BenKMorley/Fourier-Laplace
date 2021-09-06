@@ -3,17 +3,10 @@ import matplotlib.pyplot as plt
 from numpy.core.numeric import zeros_like
 from numpy.fft import fftn, ifftn
 from numpy.lib.function_base import gradient
+from scipy.optimize import minimize, least_squares
 from tqdm import tqdm
 from multiprocessing import Pool
 import pickle
-
-## General Parameters
-no_samples = 500
-L = 256
-q_fac = 2 * numpy.pi / L
-show_to = L // 4
-offsets = numpy.arange(0, 10)
-g = 0.1
 
 
 ## Define the expected q dependence function
@@ -59,6 +52,7 @@ def Laplace_Transform_1D(data, offset=1):
 
 def Laplace_Transform_ND(data, dim, offset):
     L = data.shape[0]
+    q_fac = 2 * numpy.pi / L
     p_s = numpy.arange(L) * q_fac
     assert len(offset) == dim
 
@@ -72,14 +66,19 @@ def Laplace_Transform_ND(data, dim, offset):
         comb = numpy.outer(p_s, x_s)
         # factor = prefactor.reshape((L, 1)).repeat(L, axis=1) * numpy.exp(-comb)
 
-        data = numpy.tensordot(data, numpy.exp(-comb), axes=(d, 1))
+        # if dim == 2:
+        #     data_new = numpy.zeros_like(data)
+        #     for i in range(L):
+        #         for j in range(L):
+        #             for k in range(L):
+        #                 data_new[i, j] += numpy.exp(-comb)[i, k] * data[k, j]
+
+        data = numpy.tensordot(numpy.exp(-comb), data, axes=(1, d))
 
     return data
 
 
 def gen_data(params, dim=3, rerun=False, offsets=range(10)):
-
-
     alpha, beta, gamma, eps = params
 
     data_q = analytic(q_tuple, g, alpha, beta, gamma)
@@ -251,16 +250,15 @@ def plotting(data):  # data assumed to be the form of what is returned by analys
     plt.clf()
 
 
-def analysis_ND_Laplace(params, dim=3):
+def analysis_ND_Laplace(params, L, dim=3, cut=0.1, g=0.1, no_samples=500):
     alpha, beta, gamma, eps = params
 
     q_s = numpy.arange(L) * numpy.pi * 2 / L
 
-    data_q_ND = analytic((q_s,) * dim, g, alpha, beta, gamma)
+    data_q_ND = analytic(L, dim, g, alpha, beta, gamma)
 
     data_q_FT = numpy.zeros((no_samples, ) + (L, ) * dim)
     data_q_LT = numpy.zeros((no_samples, ) + (L, ) * dim)
-    data_q_LT2 = numpy.zeros((no_samples, ) + (L, ) * dim)
 
     for i in tqdm(range(no_samples)):
         noise = eps * numpy.random.randn(*((L, ) * dim))
@@ -268,13 +266,62 @@ def analysis_ND_Laplace(params, dim=3):
         data_q = data_q_ND + noise
 
         data_x = ifftn(data_q).real
-
         data_q_FT[i] = fftn(data_x).real
-
         data_q_LT[i] = Laplace_Transform_ND(data_x, dim=dim, offset=(1, ) * dim)
-        data_q_LT2[i] = Laplace_Transform_1D(data_x)
 
-        print("Hello")
+    # Combine the Fourier Transform and the Laplace Transform to remove the q^2
+    # piece
+    data_processed = data_q_FT + data_q_LT
+
+    # Cut away the higher momentum modes from the data
+    for d in range(dim):
+        data_processed = numpy.take(data_processed, numpy.arange(int(numpy.rint(L * cut))), axis=1 + d)
+
+    # Get the covariance matrix using the samples
+    # cov_matrix = numpy.cov(data_processed)
+    # cov_1_2 = numpy.linalg.cholesky(cov_matrix)
+    # cov_inv = numpy.linalg.inv(cov_1_2)
+
+    # Use the linearity of the Fourier and Laplace Transforms to prerun them
+    data_q_alpha = analytic(L, dim, g, 1, 0, 0)
+    data_x_alpha = ifftn(data_q_alpha).real
+    data_q_FT_alpha = fftn(data_x_alpha).real
+    data_q_LT_alpha = Laplace_Transform_ND(data_x_alpha, dim=dim, offset=(1, ) * dim)
+    data_q_alpha = data_q_FT_alpha + data_q_LT_alpha
+
+    data_q_beta = analytic(L, dim, g, 0, 1, 0)
+    data_x_beta = ifftn(data_q_beta).real
+    data_q_FT_beta = fftn(data_x_beta).real
+    data_q_LT_beta = Laplace_Transform_ND(data_x_beta, dim=dim, offset=(1, ) * dim)
+    data_q_beta = data_q_FT_beta + data_q_LT_beta
+
+    data_q_gamma = analytic(L, dim, g, 0, 0, 1)
+    data_x_gamma = ifftn(data_q_gamma).real
+    data_q_FT_gamma = fftn(data_x_gamma).real
+    data_q_LT_gamma = Laplace_Transform_ND(data_x_gamma, dim=dim, offset=(1, ) * dim)
+    data_q_gamma = data_q_FT_gamma + data_q_LT_gamma
+
+    # Now compare to model data with no q^2 piece
+    def minimize_this(x, cov_inv=None):
+        alpha, beta = x
+
+        data_q_ref = alpha * data_q_alpha + beta * data_q_beta
+
+        # Apply the same cut to the reference data
+        for d in range(dim):
+            data_q_ref = numpy.take(data_q_ref, numpy.arange(int(numpy.rint(L * cut))), axis=d)
+
+        residuals = data_q_ref - numpy.mean(data_processed, axis=0)
+        residuals = residuals.reshape(numpy.product(residuals.shape))
+
+        # normalized_residuals = numpy.dot(cov_inv, residuals)
+
+        return residuals
+
+    # res = least_squares(minimize_this, [0, 0], args=(cov_inv, ), method="lm")
+    res = least_squares(minimize_this, [0, 0], method="lm")
+
+    return res
 
 
 def Fourier_to_Laplace_analytic(f_p, r=1):
@@ -297,3 +344,6 @@ def Fourier_to_Laplace_analytic(f_p, r=1):
 
 
 params = [[1, 0, 0, 0.1], [0, 1, 0, 0.1], [0, 0, 1, 0.1], [1, 1, 0.1, 0.1]]
+
+L = 32
+res = analysis_ND_Laplace([1, 0, 0.1, 0], L, dim=2, cut=0.1, no_samples=1)
