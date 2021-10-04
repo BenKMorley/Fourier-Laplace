@@ -403,30 +403,63 @@ class explore_params():
         self.params_latex["eps"] = r"$\epsilon$"
         self.params_latex["cut"] = r"cut"
 
+        self.find_momenta()
+
         # Use the linearity of the Fourier and Laplace Transforms to prerun them
-        data_q_alpha = analytic(self.L, self.dim, self.N, self.g, 1, 0, 0, 0)
+        data_q_alpha = self.analytic(1, 0, 0, 0)
         data_x_alpha = ifftn(data_q_alpha).real
         data_q_FT_alpha = fftn(data_x_alpha).real
         data_q_LT_alpha = Laplace_Transform_ND(data_x_alpha, dim=self.dim, offset=(1, ) * self.dim)
         self.data_q_alpha = data_q_FT_alpha + data_q_LT_alpha
 
-        data_q_beta = analytic(self.L, self.dim, self.N, self.g, 0, 1, 0, 0)
+        data_q_beta = self.analytic(0, 1, 0, 0)
         data_x_beta = ifftn(data_q_beta).real
         data_q_FT_beta = fftn(data_x_beta).real
         data_q_LT_beta = Laplace_Transform_ND(data_x_beta, dim=self.dim, offset=(1, ) * self.dim)
         self.data_q_beta = data_q_FT_beta + data_q_LT_beta
 
-        data_q_gamma = analytic(self.L, self.dim, self.N, self.g, 0, 0, 1, 0)
+        data_q_gamma = self.analytic(0, 0, 1, 0)
         data_x_gamma = ifftn(data_q_gamma).real
         data_q_FT_gamma = fftn(data_x_gamma).real
         data_q_LT_gamma = Laplace_Transform_ND(data_x_gamma, dim=self.dim, offset=(1, ) * self.dim)
         self.data_q_gamma = data_q_FT_gamma + data_q_LT_gamma
 
-        data_q_eta = analytic(self.L, self.dim, self.N, self.g, 0, 0, 0, 1)
+        data_q_eta = self.analytic(0, 0, 0, 1)
         data_x_eta = ifftn(data_q_eta).real
         data_q_FT_eta = fftn(data_x_eta).real
         data_q_LT_eta = Laplace_Transform_ND(data_x_eta, dim=self.dim, offset=(1, ) * self.dim)
         self.data_q_eta = data_q_FT_eta + data_q_LT_eta
+
+    def find_momenta(self):
+        # Make the q squared and q_hat squared contributions
+        q_s = []  # start as list to append
+        q_fac = 2 * numpy.pi / self.L
+
+        for i in range(self.dim):
+            q_part = numpy.arange(self.L).reshape((1, ) * i + (self.L, ) + (1, ) * (self.dim - i - 1))
+
+            # Apply the periodicity of the lattice
+            q_part = (q_part + self.L // 2) % self.L - self.L // 2
+            q_part = q_part * q_fac
+
+            for j in range(self.dim - 1):
+                q_part.repeat(self.L, axis=i)
+
+            q_s.append(q_part)
+
+        self.q_sq = numpy.zeros((self.L, ) * self.dim)
+        self.q_hat_sq = numpy.zeros((self.L, ) * self.dim)
+
+        for d in range(self.dim):
+            q_hat = 2 * numpy.sin(q_s[d] / 2)
+            self.q_hat_sq += q_hat ** 2
+            self.q_sq += q_s[d] ** 2
+
+    def analytic(self, alpha, beta, gamma, eta):
+        q_sq = self.q_hat_sq
+
+        return self.N ** 2 * (q_sq / self.g ** 2) * (alpha * numpy.sqrt(q_sq) + beta * self.g * (1 / 2) * \
+            numpy.log(q_sq / self.g ** 2, out=numpy.zeros_like(q_sq), where=q_sq!=0) + gamma) + eta
 
     def test_param(self, param_name, xlog=False, ylog=False, show=False):
         param_mem = copy(self.params[param_name])
@@ -485,46 +518,71 @@ class explore_params():
     def plot_curves(self):
         analysis_ND_Laplace(self.params, self.L, dim=self.dim, no_samples=self.no_samples, g=self.g, plot=True)
 
-    def plot_gamma(self, num_cuts, num_gammas, plot=False):
-        cuts = numpy.linspace(0.05, 0.3, num_cuts)
-        gammas = 10 ** numpy.linspace(-1, 5, num_gammas)
-
+    def cut_dependence(self, plot=False, gamma=1, eps=1, rerun=False, use_octant=True):
+        cut_ints = numpy.arange(2, self.L // 2 + 1)
+        cuts = numpy.arange(2, self.L // 2 + 1) * numpy.pi * 2 / self.L
+        num_cuts = len(cuts)
         fake_data_no_gamma = self.alpha * self.data_q_alpha + self.beta * self.data_q_beta + \
-                self.eta * self.data_q_eta
+                      self.eta * self.data_q_eta
 
-        # To collect the results
-        alphas = numpy.zeros((num_gammas, num_cuts, self.no_samples))
-        betas = numpy.zeros((num_gammas, num_cuts, self.no_samples))
-        etas = numpy.zeros((num_gammas, num_cuts, self.no_samples))
+        # Try to extract saved results
+        try:
+            alphas = numpy.load(f"data/alphas_L{self.L}_samples{self.no_samples}.npy")
+            betas = numpy.load(f"data/betas_L{self.L}_samples{self.no_samples}.npy")
+            etas = numpy.load(f"data/etas_L{self.L}_samples{self.no_samples}.npy")
 
-        for i in tqdm(range(self.no_samples)):
-            noise = self.eps * numpy.random.randn(*((self.L, ) * self.dim))
-            noise_x = ifftn(noise).real
-            noise_q_FT = fftn(noise_x).real
-            noise_q_LT = Laplace_Transform_ND(noise_x, dim=self.dim, offset=(1, ) * self.dim)
-            noise_q = noise_q_FT + noise_q_LT
+        except Exception:
+            rerun = True
 
-            for j, cut in enumerate(cuts):
-                # Cut away the higher momentum modes from the data
-                for d in range(self.dim):
-                    if d == 0:
-                        noise_data_q = numpy.take(noise_q, numpy.arange(1, int(numpy.rint(self.L * cut))), axis=d)
-                        fake_data_q = numpy.take(fake_data_no_gamma, numpy.arange(1, int(numpy.rint(self.L * cut))), axis=d)
-                        alpha_data_q = numpy.take(self.data_q_alpha, numpy.arange(1, int(numpy.rint(self.L * cut))), axis=d)
-                        beta_data_q = numpy.take(self.data_q_beta, numpy.arange(1, int(numpy.rint(self.L * cut))), axis=d)
-                        gamma_data_q = numpy.take(self.data_q_gamma, numpy.arange(1, int(numpy.rint(self.L * cut))), axis=d)
-                        eta_data_q = numpy.take(self.data_q_eta, numpy.arange(1, int(numpy.rint(self.L * cut))), axis=d)
+        if rerun:
+            # To collect the results
+            alphas = numpy.zeros((num_cuts, self.no_samples))
+            betas = numpy.zeros((num_cuts, self.no_samples))
+            etas = numpy.zeros((num_cuts, self.no_samples))
+
+            for i in tqdm(range(self.no_samples)):
+                noise = self.eps * numpy.random.randn(*((self.L, ) * self.dim))
+                noise_x = ifftn(noise).real
+                noise_q_FT = fftn(noise_x).real
+                noise_q_LT = Laplace_Transform_ND(noise_x, dim=self.dim, offset=(1, ) * self.dim)
+                noise_q = noise_q_FT + noise_q_LT
+
+                for j, cut in enumerate(cuts):
+                    # Use only one octant of the data as the signal is the same for all octants
+                    if use_octant:
+                        indices = numpy.arange(cut_ints[j] + 1)
+
+                        for d in range(self.dim):
+                            if d == 0:
+                                noise_data_q = numpy.take(noise_q, indices, axis=d)
+                                fake_data_q = numpy.take(fake_data_no_gamma, indices, axis=d)
+                                alpha_data_q = numpy.take(self.data_q_alpha, indices, axis=d)
+                                beta_data_q = numpy.take(self.data_q_beta, indices, axis=d)
+                                gamma_data_q = numpy.take(self.data_q_gamma, indices, axis=d)
+                                eta_data_q = numpy.take(self.data_q_eta, indices, axis=d)
+                                q_sq = numpy.take(self.q_sq, indices, axis=d)
+
+                            else:
+                                noise_data_q = numpy.take(noise_data_q, indices, axis=d)
+                                fake_data_q = numpy.take(fake_data_q, indices, axis=d)
+                                alpha_data_q = numpy.take(alpha_data_q, indices, axis=d)
+                                beta_data_q = numpy.take(beta_data_q, indices, axis=d)
+                                gamma_data_q = numpy.take(gamma_data_q, indices, axis=d)
+                                eta_data_q = numpy.take(eta_data_q, indices, axis=d)
+                                q_sq = numpy.take(q_sq, indices, axis=d)
+
+                        mask = q_sq < (cut ** 2 + 10 ** -10)
+                        noisy_data = fake_data_q + noise_data_q + gamma * gamma_data_q
 
                     else:
-                        noise_data_q = numpy.take(noise_data_q, numpy.arange(1, int(numpy.rint(self.L * cut))), axis=d)
-                        fake_data_q = numpy.take(fake_data_q, numpy.arange(1, int(numpy.rint(self.L * cut))), axis=d)
-                        alpha_data_q = numpy.take(alpha_data_q, numpy.arange(1, int(numpy.rint(self.L * cut))), axis=d)
-                        beta_data_q = numpy.take(beta_data_q, numpy.arange(1, int(numpy.rint(self.L * cut))), axis=d)
-                        gamma_data_q = numpy.take(gamma_data_q, numpy.arange(1, int(numpy.rint(self.L * cut))), axis=d)
-                        eta_data_q = numpy.take(eta_data_q, numpy.arange(1, int(numpy.rint(self.L * cut))), axis=d)
+                        mask = self.q_sq < (cut ** 2 + 10 ** -10)
+                        noisy_data = fake_data_no_gamma + noise_q + gamma * self.data_q_gamma
+                        alpha_data_q = self.data_q_alpha
+                        beta_data_q = self.data_q_beta
+                        eta_data_q = self.data_q_eta
 
-                for k, gamma in enumerate(gammas):
-                    noisy_data = fake_data_q + noise_data_q + gamma * gamma_data_q
+                    # Ignore the troublesome origin point
+                    mask[(0,) * self.dim] = 0
 
                     # Now compare to model data with no q^2 piece
                     def minimize_this(x, cov_inv=None):
@@ -532,69 +590,97 @@ class explore_params():
                         # Reference clean data with no gamma or epsilon
                         data_q_ref = alpha * alpha_data_q + beta * beta_data_q + eta * eta_data_q
 
+                        residuals = (data_q_ref - noisy_data) * mask
                         residuals = data_q_ref - noisy_data
-                        residuals = residuals.reshape(numpy.product(residuals.shape))
 
-                        # normalized_residuals = numpy.dot(cov_inv, residuals)
+                        residuals = residuals.reshape(numpy.product(residuals.shape))
 
                         return residuals
 
                     res = least_squares(minimize_this, [0, 0, 0], method="lm")
-                    alphas[k, j, i] = res.x[0]
-                    betas[k, j, i] = res.x[1]
-                    etas[k, j, i] = res.x[2]
+                    alphas[j, i] = res.x[0]
+                    betas[j, i] = res.x[1]
+                    etas[j, i] = res.x[2]
 
-        alphas_mean = numpy.mean(alphas, axis=2)
-        betas_mean = numpy.mean(betas, axis=2)
-        etas_mean = numpy.mean(etas, axis=2)
+            numpy.save(f"data/alphas_L{self.L}_samples{self.no_samples}.npy", alphas)
+            numpy.save(f"data/betas_L{self.L}_samples{self.no_samples}.npy", betas)
+            numpy.save(f"data/etas_L{self.L}_samples{self.no_samples}.npy", etas)
 
-        alphas_std = numpy.std(alphas, axis=2)
-        betas_std = numpy.std(betas, axis=2)
-        etas_std = numpy.std(etas, axis=2)
+        alphas_mean = numpy.mean(alphas, axis=1)
+        betas_mean = numpy.mean(betas, axis=1)
+        etas_mean = numpy.mean(etas, axis=1)
+
+        alphas_std = numpy.std(alphas, axis=1)
+        betas_std = numpy.std(betas, axis=1)
+        etas_std = numpy.std(etas, axis=1)
 
         if plot:
-            for j, gamma in enumerate(gammas):
-                plt.plot(cuts, alphas_mean[j] / gamma, color='k', label=f'eps/gamma = {self.eps/gamma}')
+            color_sys = 'k'
+            color_stat = 'b'
+            axis_font = {'size': '20'}
 
-                plt.fill_between(cuts, (alphas_mean[j] - alphas_std[j]) / gamma,
-                                 (alphas_mean[j] + alphas_std[j]) / gamma, alpha=0.1,
-                                 color='b')
+            fig, ax1 = plt.subplots()
 
-            plt.xlabel('cut')
-            plt.ylabel(r'\alpha / \gamma')
+            ax1.set_xlabel(r'$|q|_{max}$', rotation=0)
+            ax1.set_ylabel(r'$\frac{\Delta \alpha}{\gamma}$', color=color_sys, rotation=0, **axis_font)
+            lns1 = ax1.plot(cuts, alphas_mean, color=color_sys, label=f'systematic error')
+            ax1.tick_params(axis='y', labelcolor=color_sys)
 
+            ax2 = ax1.twinx()
+            ax2.set_ylabel(r'$\frac{\sigma_\alpha}{\epsilon}$', color=color_stat, rotation=0, **axis_font)  # we already handled the x-label with ax1
+            lns2 = ax2.plot(cuts, alphas_std, color='b', label='statistical error')
+            ax2.tick_params(axis='y', labelcolor=color_stat)
+
+            lns = lns1 + lns2
+            labs = [l.get_label() for l in lns]
+            ax1.legend(lns, labs)
+            fig.tight_layout()  # otherwise the right y-label is slightly clipped
+            plt.savefig(f"graphs/cut_dependance_L{self.L}_alpha.pdf")
             plt.show()
 
-            for j, gamma in enumerate(gammas):
-                plt.plot(cuts, betas_mean[j] / gamma, color='k', label=f'eps/gamma = {self.eps/gamma}')
+            fig, ax1 = plt.subplots()
 
-                plt.fill_between(cuts, (betas_mean[j] - betas_std[j]) / gamma,
-                                 (betas_mean[j] + betas_std[j]) / gamma, alpha=0.1,
-                                 color='b')
+            ax1.set_xlabel(r'$|q|_{max}$', rotation=0)
+            ax1.set_ylabel(r'$\frac{\Delta \beta}{\gamma}$', color=color_sys, rotation=0, **axis_font)
+            lns1 = ax1.plot(cuts, betas_mean, color=color_sys, label=f'systematic error')
+            ax1.tick_params(axis='y', labelcolor=color_sys)
 
-            plt.xlabel('cut')
-            plt.ylabel(r'\beta / \gamma')
+            ax2 = ax1.twinx()
+            ax2.set_ylabel(r'$\frac{\sigma_\beta}{\epsilon}$', color=color_stat, rotation=0, **axis_font)  # we already handled the x-label with ax1
+            lns2 = ax2.plot(cuts, betas_std, color='b', label='statistical error')
+            ax2.tick_params(axis='y', labelcolor=color_stat)
 
+            lns = lns1 + lns2
+            labs = [l.get_label() for l in lns]
+            ax1.legend(lns, labs)
+            fig.tight_layout()  # otherwise the right y-label is slightly clipped
+            plt.savefig(f"graphs/cut_dependance_L{self.L}_beta.pdf")
             plt.show()
 
-            for j, gamma in enumerate(gammas):
-                plt.plot(cuts, etas_mean[j] / gamma, color='k', label=f'eps/gamma = {self.eps/gamma}')
+            fig, ax1 = plt.subplots()
 
-                plt.fill_between(cuts, (etas_mean[j] - etas_std[j]) / gamma,
-                                 (etas_mean[j] + etas_std[j]) / gamma, alpha=0.1,
-                                 color='b')
+            ax1.set_xlabel(r'$|q|_{max}$', rotation=0)
+            ax1.set_ylabel(r'$\frac{\Delta \eta}{\gamma}$', color=color_sys, rotation=0, **axis_font)
+            lns1 = ax1.plot(cuts, etas_mean, color=color_sys, label=f'systematic error')
+            ax1.tick_params(axis='y', labelcolor=color_sys)
 
-            plt.xlabel('cut')
-            plt.ylabel(r'\eta / \gamma')
+            ax2 = ax1.twinx()
+            ax2.set_ylabel(r'$\frac{\sigma_\eta}{\epsilon}$', color=color_stat, rotation=0, **axis_font)  # we already handled the x-label with ax1
+            lns2 = ax2.plot(cuts, etas_std, color='b', label='statistical error')
+            ax2.tick_params(axis='y', labelcolor=color_stat)
 
-            plt.xscale('log')
+            lns = lns1 + lns2
+            labs = [l.get_label() for l in lns]
+            ax1.legend(lns, labs)
+            fig.tight_layout()  # otherwise the right y-label is slightly clipped
+            plt.savefig(f"graphs/cut_dependance_L{self.L}_eta.pdf")
             plt.show()
 
         return alphas, betas, etas
 
 
-x = explore_params(256, 2, 20, 100, gamma=0, alpha=0, eps=1, dim=2, cut=0.1, g=0.1, eta=0)
-x.plot_gamma(20, 100, plot=True)
+x = explore_params(256, 2, 20, 500, gamma=0, alpha=0, eps=1, dim=3, cut=0.1, g=0.1, eta=0)
+x.cut_dependence(plot=True)
 # x.plot_curves()
 # x.test_param("alpha", xlog=True, ylog=True)
 # x.test_param("beta", xlog=True, ylog=True)
