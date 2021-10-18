@@ -1,5 +1,6 @@
-run_J_comparison.py
-graphs/*
+*cpython*
+Local/run*
+Local/graphs/*
 *.pdf
 data/*
 test*
