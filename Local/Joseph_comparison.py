@@ -272,60 +272,6 @@ class explore_params():
         return self.N ** 2 * (q_sq / self.g ** 2) * (alpha * numpy.sqrt(q_sq) + beta * self.g * (1 / 2) *
             numpy.log(q_sq / self.g ** 2, out=numpy.zeros_like(q_sq), where=q_sq != 0) + gamma) + eta
 
-    def test_param(self, param_name, xlog=False, ylog=False, show=False):
-        param_mem = copy(self.params[param_name])
-        alphas = numpy.zeros(self.test_points)
-        betas = numpy.zeros(self.test_points)
-
-        for i, x in enumerate(self.param_ranges[param_name]):
-            self.params.pop(param_name)
-            self.params.update({param_name: x})
-
-            res = analysis_ND_Laplace(self.params, self.L, dim=self.dim, no_samples=self.no_samples, g=self.g, N=self.N)
-
-            alphas[i], betas[i] = res.x
-
-        self.params.pop(param_name)
-
-        plt.plot(self.param_ranges[param_name], alphas, label=r'$\alpha$ out')
-        plt.xlabel(self.params_latex[param_name])
-        plt.title("Data In: " + reduce(lambda a, b: a + b,
-                    [rf"{self.params_latex[param]}: {self.params[param]} " for param in self.params]))
-        if xlog:
-            plt.xscale('log')
-        if ylog:
-            plt.yscale('log')
-        plt.legend()
-
-        if show:
-            plt.show()
-
-        else:
-            plt.savefig(f"graphs/{param_name}_dependence_for_alpha" + reduce(lambda a, b: a + b, [f"_{param}{self.params[param]}" for param in self.params]) + ".pdf")
-
-        plt.clf()
-
-        plt.plot(self.param_ranges[param_name], betas, label=r'$\beta$ out')
-        plt.xlabel(self.params_latex[param_name])
-        plt.title("Data In: " + reduce(lambda a, b: a + b,
-                    [rf"{self.params_latex[param]}: {self.params[param]} " for param in self.params]))
-        if xlog:
-            plt.xscale('log')
-        if ylog:
-            plt.yscale('log')
-        plt.legend()
-
-        if show:
-            plt.show()
-
-        else:
-            plt.savefig(f"graphs/{param_name}_dependence_for_beta" + reduce(lambda a, b: a + b, [f"_{param}{self.params[param]}" for param in self.params]) + ".pdf")
-
-        plt.clf()
-
-        # Add the parameter back in
-        self.params[param_name] = param_mem
-
     def plot_curves(self):
         analysis_ND_Laplace(self.params, self.L, dim=self.dim, no_samples=self.no_samples, g=self.g, plot=True)
 
