@@ -1,18 +1,13 @@
 import numpy
 import matplotlib.pyplot as plt
-from numpy.core.numeric import indices, tensordot, zeros_like
 from numpy.fft import fftn, ifftn
-from numpy.lib.function_base import gradient
 from scipy.optimize import minimize, least_squares
 from tqdm import tqdm
-from multiprocessing import Pool
 import sys
 import os
 import re
 import pdb
-from copy import copy
-from functools import reduce
-from Joseph_comparison import analytic, Laplace_Transform_ND
+from Joseph_comparison import Laplace_Transform_ND
 
 # Import from the Core directory
 sys.path.append(os.getcwd() + '/..')
@@ -24,11 +19,12 @@ from Core.MISC import GRID_convention_g, GRID_convention_L, GRID_convention_m, G
 
 
 class analysis():
-    def __init__(self, L, N, g, m, components1, components2, no_samples=100, base_dir="/mnt/drive2/Fourier-Laplace/data"):
+    def __init__(self, L, N, g, m, components1, components2, no_samples=100, base_dir="/mnt/drive2/Fourier-Laplace/data", subtract=True, dim=3):
         self.N = N
         self.L = L
         self.g = g
-        self.dim = 3
+        self.subtract_mean = subtract
+        self.dim = dim
         self.q_s = numpy.arange(self.L) * numpy.pi * 2 / L
         self.no_samples = no_samples
         self.components1 = components1
@@ -114,7 +110,6 @@ class analysis():
         # We only want configs that have both correlators
         self.configs = numpy.sort(numpy.array(list(set(configs1).union(set(configs2)))))
 
-        # HERE FOR TESTING ONLY!
         self.configs = self.configs[:50]
 
     def get_mom_space(self, config):
@@ -123,66 +118,92 @@ class analysis():
 
         # Reshape the data which has been saved linearlly
         data_1 = numpy.loadtxt(f"{self.directory}/emtc_{x1}_{y1}_{config}_real.txt").reshape((self.L, self.L, self.L))
-        data_2 = numpy.loadtxt(f"{self.directory}/emtc_{x1}_{y1}_{config}_real.txt").reshape((self.L, self.L, self.L))
+        data_2 = numpy.loadtxt(f"{self.directory}/emtc_{x2}_{y2}_{config}_real.txt").reshape((self.L, self.L, self.L))
+
+        # Subtract the mean of each operator
+        if self.subtract_mean:
+            data_1 = data_1 - numpy.mean(data_1)
+            data_2 = data_2 - numpy.mean(data_2)
 
         data_1_p = fftn(data_1)
 
-        # Use the opposite momentum for the second correlator
-        data_2_p = fftn(data_2)[::-1, ::-1, ::-1]
+        # Use the opposite momentum for the second correlator - do this by taking the conjugate
+        data_2_p = numpy.conj(fftn(data_2))
 
         # Correlator is given by the product of these two variables
-        return data_1_p * data_2_p
+        result = data_1_p * data_2_p
 
-    def cut_dependence(self, plot=False, rerun=False, use_octant=True, axis=0):
+        return result
+
+    def cut_dependence(self, plot=True, rerun=False, use_octant=True, axis=0, plot_errors=False, fitting_dims=1):
         cuts = numpy.arange(4, self.L // 2) * numpy.pi * 2 / self.L
         num_cuts = len(cuts)
 
+        x1, y1 = self.components1
+        x2, y2 = self.components2
+
         # Try to extract saved results
-        # try:
-        #     alphas = numpy.load(f"data/alphas_L{self.L}_samples{self.no_samples}.npy")
-        #     betas = numpy.load(f"data/betas_L{self.L}_samples{self.no_samples}.npy")
-        #     etas = numpy.load(f"data/etas_L{self.L}_samples{self.no_samples}.npy")
-        #     raise(Exception)
+        try:
+            alphas = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_alphas_L{self.L}_samples{self.no_samples}.npy")
+            betas = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_betas_L{self.L}_samples{self.no_samples}.npy")
+            etas = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_etas_L{self.L}_samples{self.no_samples}.npy")
 
-        # except Exception:
-        #     rerun = True
+        except Exception:
+            rerun = True
 
-        # Use this here while testing
         rerun = True
-
         if rerun:
             # To collect the results
             alphas = numpy.zeros((num_cuts, self.no_samples))
             betas = numpy.zeros((num_cuts, self.no_samples))
             etas = numpy.zeros((num_cuts, self.no_samples))
 
-            mom_data = numpy.zeros((len(self.configs), self.L))
+            mom_data = numpy.zeros((len(self.configs), ) + (self.L, ) * fitting_dims)
 
             # All directions are identical by construction
-            alpha_data_q = self.data_q_alpha[0, 0]
-            beta_data_q = self.data_q_beta[0, 0]
-            eta_data_q = self.data_q_eta[0, 0]
+            alpha_data_q = self.data_q_alpha[(0, ) * (self.dim - fitting_dims)]
+            beta_data_q = self.data_q_beta[(0, ) * (self.dim - fitting_dims)]
+            eta_data_q = self.data_q_eta[(0, ) * (self.dim - fitting_dims)]
 
             for i, config in tqdm(enumerate(self.configs)):
                 correlator_p = self.get_mom_space(config)
 
+                # Get the correlator in position space
+                correlator_x = ifftn(correlator_p)
+
+                # Take the Laplace Transform
+                Laplace_p = Laplace_Transform_ND(correlator_x, self.dim, (1, ) * self.dim)
+
+                # Add the two contributions together
+                result_p = correlator_p + Laplace_p
+
                 # Keep a 1D sample of the correlator in the 3 available directions
-                mom_data[i] = correlator_p[(0, ) * axis][slice(0, None, 1)][(0, ) * (self.dim - axis - 1)]
+                mom_data[i] = result_p[(0, ) * (self.dim - fitting_dims)]
 
-            # Get the correlation matrix for each dimension
-            cov_matrices = numpy.zeros((self.L, self.L))
-
-            cov_matrix = numpy.cov(mom_data.T)
+            pdb.set_trace()
+            # Flatten the mom_data
+            mom_data_flat = mom_data.reshape(len(self.configs), numpy.product(mom_data.shape[1:]))
 
             for j, cut in enumerate(cuts):
-                keep = self.q_s <= cut + 10 ** -15
+                # Flatten the momentum
+                q_sq = self.q_sq[(0, ) * (self.dim - fitting_dims)]
+                q_sq = q_sq.reshape(numpy.product(q_sq.shape))
+
+                keep = q_sq <= cut + 10 ** -15
+
+                # Keep only the momenta that satisfy the cut
+                mom_data_keep = mom_data_flat[:, keep]
+
+                # Use a frozen covariance matrix
+                cov_matrix = numpy.cov(mom_data_keep.T)
 
                 # Remove the origin as it contains the disconnected contribution we don't want
-                keep[0] = False
+                keep[(0, ) * len(keep.shape)] = False
+
+                keep = keep.reshape(numpy.product(keep.shape))
 
                 # Invert the covariance matrix
-                cov = cov_matrix[keep][:, keep]
-                cov_1_2 = numpy.linalg.cholesky(cov)
+                cov_1_2 = numpy.linalg.cholesky(cov_matrix)
                 cov_inv = numpy.linalg.inv(cov_1_2)
 
                 alpha_data = alpha_data_q[keep]
@@ -192,9 +213,9 @@ class analysis():
                 indices = numpy.random.randint(len(self.configs), size=(self.no_samples, len(self.configs)))
 
                 for i in range(self.no_samples):
-                    mom_data = mom_data[indices[i]]
+                    mom_data_boot = mom_data_flat[indices[i]]
 
-                    mom_piece = numpy.mean(mom_data, axis=0)[keep]
+                    mom_piece = numpy.mean(mom_data_boot, axis=0)[keep]
 
                     # Now compare to model data with no q^2 piece
                     def minimize_this(x):
@@ -214,9 +235,9 @@ class analysis():
                     betas[j, i] = res.x[1]
                     etas[j, i] = res.x[2]
 
-            # numpy.save(f"data/alphas_L{self.L}_samples{self.no_samples}.npy", alphas)
-            # numpy.save(f"data/betas_L{self.L}_samples{self.no_samples}.npy", betas)
-            # numpy.save(f"data/etas_L{self.L}_samples{self.no_samples}.npy", etas)
+            numpy.save(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_alphas_L{self.L}_samples{self.no_samples}.npy", alphas)
+            numpy.save(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_betas_L{self.L}_samples{self.no_samples}.npy", betas)
+            numpy.save(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_etas_L{self.L}_samples{self.no_samples}.npy", etas)
 
         alphas_mean = numpy.mean(alphas, axis=1)
         betas_mean = numpy.mean(betas, axis=1)
@@ -227,6 +248,22 @@ class analysis():
         etas_std = numpy.std(etas, axis=1)
 
         if plot:
+            plt.fill_between(cuts, alphas_mean - alphas_std, alphas_mean + alphas_std, alpha=0.1, color='k')
+            plt.title(f"Alphas: T {self.components1} T {self.components2}")
+            plt.xlabel(r'$|q|_{max}$')
+            plt.show()
+
+            plt.fill_between(cuts, betas_mean - betas_std, betas_mean + betas_std, alpha=0.1, color='k')
+            plt.title(f"Betas: T {self.components1} T {self.components2}")
+            plt.xlabel(r'$|q|_{max}$')
+            plt.show()
+
+            plt.fill_between(cuts, etas_mean - etas_std, etas_mean + etas_std, alpha=0.1, color='k')
+            plt.title(f"Etas: T {self.components1} T {self.components2}")
+            plt.xlabel(r'$|q|_{max}$')
+            plt.show()
+
+        if plot_errors:
             color_sys = 'k'
             color_stat = 'b'
             axis_font = {'size': '20'}

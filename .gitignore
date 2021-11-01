@@ -1,5 +1,6 @@
 *cpython*
 Local/run*
+Local/data/*
 Local/graphs/*
 *.pdf
 data/*
