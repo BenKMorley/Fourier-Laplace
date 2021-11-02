@@ -7,7 +7,7 @@ import sys
 import os
 import re
 import pdb
-from Joseph_comparison import Laplace_Transform_ND
+from Joseph_comparison import Laplace_Transform_ND, Laplace_Transform_1D
 
 # Import from the Core directory
 sys.path.append(os.getcwd() + '/..')
@@ -19,23 +19,35 @@ from Core.MISC import GRID_convention_g, GRID_convention_L, GRID_convention_m, G
 
 
 class analysis():
-    def __init__(self, L, N, g, m, components1, components2, no_samples=100, base_dir="/mnt/drive2/Fourier-Laplace/data", subtract=True, dim=3):
+    def __init__(self, L, N, g, m, components1, components2, no_samples=100, base_dir="/mnt/drive2/Fourier-Laplace/data", fitting_dims=1, x_max=1, dim=3):
         self.N = N
         self.L = L
         self.g = g
-        self.subtract_mean = subtract
         self.dim = dim
-        self.q_s = numpy.arange(self.L) * numpy.pi * 2 / L
+        self.x_max = x_max
+        self.fitting_dims = fitting_dims
         self.no_samples = no_samples
         self.components1 = components1
         self.components2 = components2
         self.directory = f"{base_dir}/{GRID_convention_g(g)}/{GRID_convention_N(N)}/{GRID_convention_L(L)}/{GRID_convention_m(m)}/config"
 
+        self.q_s = (numpy.arange(self.L) + self.L // 2) % self.L - self.L // 2
+        self.q_s = self.q_s * numpy.pi * 2 / L
+
+        # Cuts applied to the momentum
+        self.cuts = numpy.arange(4, self.L // 2) * numpy.pi * 2 / self.L
+
         self.find_momenta()
 
-        self.get_prediction_curves()
+        # self.get_predictions()
 
         self.detect_configs()
+
+        # Bootstrap indices used in analyses
+        self.indices = numpy.random.randint(len(self.configs), size=(self.no_samples, len(self.configs)))
+
+        # Find the momentum space values of the correlators. This is needed in all analysis
+        self.get_p_space()
 
     def analytic(self, alpha, beta, gamma, eta):
         q_sq = self.q_hat_sq
@@ -68,34 +80,34 @@ class analysis():
             self.q_hat_sq += q_hat ** 2
             self.q_sq += q_s[d] ** 2
 
-    def get_prediction_curves(self):
+    def get_predictions(self):
         # Use the linearity of the Fourier and Laplace Transforms to prerun them
         data_q_alpha = self.analytic(1, 0, 0, 0)
         data_x_alpha = ifftn(data_q_alpha).real
         data_q_FT_alpha = fftn(data_x_alpha).real
-        data_q_LT_alpha = Laplace_Transform_ND(data_x_alpha, dim=self.dim, offset=(1, ) * self.dim)
+        data_q_LT_alpha = Laplace_Transform_ND(data_x_alpha, dim=self.dim, offset=(1, ) * self.dim, x_max=self.x_max)
         self.data_q_alpha = data_q_FT_alpha + data_q_LT_alpha
 
         data_q_beta = self.analytic(0, 1, 0, 0)
         data_x_beta = ifftn(data_q_beta).real
         data_q_FT_beta = fftn(data_x_beta).real
-        data_q_LT_beta = Laplace_Transform_ND(data_x_beta, dim=self.dim, offset=(1, ) * self.dim)
+        data_q_LT_beta = Laplace_Transform_ND(data_x_beta, dim=self.dim, offset=(1, ) * self.dim, x_max=self.x_max)
         self.data_q_beta = data_q_FT_beta + data_q_LT_beta
 
         data_q_gamma = self.analytic(0, 0, 1, 0)
         data_x_gamma = ifftn(data_q_gamma).real
         data_q_FT_gamma = fftn(data_x_gamma).real
-        data_q_LT_gamma = Laplace_Transform_ND(data_x_gamma, dim=self.dim, offset=(1, ) * self.dim)
+        data_q_LT_gamma = Laplace_Transform_ND(data_x_gamma, dim=self.dim, offset=(1, ) * self.dim, x_max=self.x_max)
         self.data_q_gamma = data_q_FT_gamma + data_q_LT_gamma
 
         data_q_eta = self.analytic(0, 0, 0, 1)
         data_x_eta = ifftn(data_q_eta).real
         data_q_FT_eta = fftn(data_x_eta).real
-        data_q_LT_eta = Laplace_Transform_ND(data_x_eta, dim=self.dim, offset=(1, ) * self.dim)
+        data_q_LT_eta = Laplace_Transform_ND(data_x_eta, dim=self.dim, offset=(1, ) * self.dim, x_max=self.x_max)
         self.data_q_eta = data_q_FT_eta + data_q_LT_eta
 
     def detect_configs(self):
-        files = os.popen(f'ls {self.directory}/emtc*')
+        files = list(os.popen(f'ls {self.directory}/emtc*'))
         x1, y1 = self.components1
         x2, y2 = self.components2
 
@@ -107,23 +119,23 @@ class analysis():
                 config = int(re.findall(r'\d+_real', name)[0][:-5])
                 configs1.append(config)
 
+        for name in files:
+            if (len(re.findall(rf'emtc_{x2}_{y2}_\d+_real', name)) != 0):
+                config = int(re.findall(r'\d+_real', name)[0][:-5])
+                configs2.append(config)
+
         # We only want configs that have both correlators
-        self.configs = numpy.sort(numpy.array(list(set(configs1).union(set(configs2)))))
+        self.configs = numpy.sort(numpy.array(list(set(configs1).intersection(set(configs2)))))[:50]
 
-        self.configs = self.configs[:50]
+        self.no_configs = len(self.configs)
 
-    def get_mom_space(self, config):
+    def get_mom_space_one_config(self, config):
         x1, y1 = self.components1
         x2, y2 = self.components2
 
         # Reshape the data which has been saved linearlly
         data_1 = numpy.loadtxt(f"{self.directory}/emtc_{x1}_{y1}_{config}_real.txt").reshape((self.L, self.L, self.L))
         data_2 = numpy.loadtxt(f"{self.directory}/emtc_{x2}_{y2}_{config}_real.txt").reshape((self.L, self.L, self.L))
-
-        # Subtract the mean of each operator
-        if self.subtract_mean:
-            data_1 = data_1 - numpy.mean(data_1)
-            data_2 = data_2 - numpy.mean(data_2)
 
         data_1_p = fftn(data_1)
 
@@ -135,9 +147,49 @@ class analysis():
 
         return result
 
-    def cut_dependence(self, plot=True, rerun=False, use_octant=True, axis=0, plot_errors=False, fitting_dims=1):
-        cuts = numpy.arange(4, self.L // 2) * numpy.pi * 2 / self.L
-        num_cuts = len(cuts)
+    def get_p_space(self, rerun=False):
+        self.Laplace_p = numpy.zeros((self.no_configs, ) + (self.L, ) * self.fitting_dims)
+        self.correlator_p = numpy.zeros((self.no_configs, ) + (self.L, ) * self.fitting_dims)
+
+        x1, y1 = self.components1
+        x2, y2 = self.components2
+
+        try:
+            self.mom_data = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_mom_data_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}.npy")
+            self.correlator_p = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_correlator_p_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}.npy")
+            self.Laplace_p = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_Laplace_p_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}.npy")
+
+        except Exception:
+            rerun = True
+
+        if rerun:
+            for i, config in tqdm(enumerate(self.configs)):
+                correlator_p = self.get_mom_space_one_config(config)
+
+                # Subtract the zero mode
+                correlator_p = correlator_p - numpy.mean(correlator_p)
+
+                # Get the correlator in position space
+                correlator_x = ifftn(correlator_p)
+
+                # Take the Laplace Transform
+                Laplace_p = Laplace_Transform_ND(correlator_x, self.dim, (1, ) * self.dim, x_max=self.x_max)
+                Laplace_p2 = Laplace_Transform_1D(correlator_x, self.dim, 1, x_max=self.x_max)
+                pdb.set_trace()
+
+                # Keep a lower dimensional sample of the correlator
+                self.Laplace_p[i] = Laplace_p[(0, ) * (self.dim - self.fitting_dims)]
+                self.correlator_p[i] = correlator_p[(0, ) * (self.dim - self.fitting_dims)]
+
+            # Add the two contributions together
+            self.mom_data = self.Laplace_p + self.correlator_p
+
+            numpy.save(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_mom_data_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}.npy", self.mom_data)
+            numpy.save(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_correlator_p_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}.npy", self.correlator_p)
+            numpy.save(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_Laplace_p_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}.npy", self.Laplace_p)
+
+    def get_fit_params(self, rerun=False):
+        num_cuts = len(self.cuts)
 
         x1, y1 = self.components1
         x2, y2 = self.components2
@@ -151,42 +203,23 @@ class analysis():
         except Exception:
             rerun = True
 
-        rerun = True
         if rerun:
             # To collect the results
             alphas = numpy.zeros((num_cuts, self.no_samples))
             betas = numpy.zeros((num_cuts, self.no_samples))
             etas = numpy.zeros((num_cuts, self.no_samples))
 
-            mom_data = numpy.zeros((len(self.configs), ) + (self.L, ) * fitting_dims)
-
             # All directions are identical by construction
-            alpha_data_q = self.data_q_alpha[(0, ) * (self.dim - fitting_dims)]
-            beta_data_q = self.data_q_beta[(0, ) * (self.dim - fitting_dims)]
-            eta_data_q = self.data_q_eta[(0, ) * (self.dim - fitting_dims)]
+            alpha_data_q = self.data_q_alpha[(0, ) * (self.dim - self.fitting_dims)]
+            beta_data_q = self.data_q_beta[(0, ) * (self.dim - self.fitting_dims)]
+            eta_data_q = self.data_q_eta[(0, ) * (self.dim - self.fitting_dims)]
 
-            for i, config in tqdm(enumerate(self.configs)):
-                correlator_p = self.get_mom_space(config)
-
-                # Get the correlator in position space
-                correlator_x = ifftn(correlator_p)
-
-                # Take the Laplace Transform
-                Laplace_p = Laplace_Transform_ND(correlator_x, self.dim, (1, ) * self.dim)
-
-                # Add the two contributions together
-                result_p = correlator_p + Laplace_p
-
-                # Keep a 1D sample of the correlator in the 3 available directions
-                mom_data[i] = result_p[(0, ) * (self.dim - fitting_dims)]
-
-            pdb.set_trace()
             # Flatten the mom_data
-            mom_data_flat = mom_data.reshape(len(self.configs), numpy.product(mom_data.shape[1:]))
+            mom_data_flat = self.mom_data.reshape(len(self.configs), numpy.product(self.mom_data.shape[1:]))
 
-            for j, cut in enumerate(cuts):
+            for j, cut in enumerate(self.cuts):
                 # Flatten the momentum
-                q_sq = self.q_sq[(0, ) * (self.dim - fitting_dims)]
+                q_sq = self.q_sq[(0, ) * (self.dim - self.fitting_dims)]
                 q_sq = q_sq.reshape(numpy.product(q_sq.shape))
 
                 keep = q_sq <= cut + 10 ** -15
@@ -210,12 +243,10 @@ class analysis():
                 beta_data = beta_data_q[keep]
                 eta_data = eta_data_q[keep]
 
-                indices = numpy.random.randint(len(self.configs), size=(self.no_samples, len(self.configs)))
-
                 for i in range(self.no_samples):
-                    mom_data_boot = mom_data_flat[indices[i]]
+                    mom_data_boot = mom_data_keep[self.indices[i]]
 
-                    mom_piece = numpy.mean(mom_data_boot, axis=0)[keep]
+                    mom_piece = numpy.mean(mom_data_boot, axis=0)
 
                     # Now compare to model data with no q^2 piece
                     def minimize_this(x):
@@ -239,29 +270,33 @@ class analysis():
             numpy.save(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_betas_L{self.L}_samples{self.no_samples}.npy", betas)
             numpy.save(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_etas_L{self.L}_samples{self.no_samples}.npy", etas)
 
-        alphas_mean = numpy.mean(alphas, axis=1)
-        betas_mean = numpy.mean(betas, axis=1)
-        etas_mean = numpy.mean(etas, axis=1)
+        self.alphas = alphas
+        self.betas = betas
+        self.etas = etas
 
-        alphas_std = numpy.std(alphas, axis=1)
-        betas_std = numpy.std(betas, axis=1)
-        etas_std = numpy.std(etas, axis=1)
+    def plot_fit_params(self, plot_errors=True):
+        alphas_mean = numpy.mean(self.alphas, axis=1)
+        betas_mean = numpy.mean(self.betas, axis=1)
+        etas_mean = numpy.mean(self.etas, axis=1)
 
-        if plot:
-            plt.fill_between(cuts, alphas_mean - alphas_std, alphas_mean + alphas_std, alpha=0.1, color='k')
-            plt.title(f"Alphas: T {self.components1} T {self.components2}")
-            plt.xlabel(r'$|q|_{max}$')
-            plt.show()
+        alphas_std = numpy.std(self.alphas, axis=1)
+        betas_std = numpy.std(self.betas, axis=1)
+        etas_std = numpy.std(self.etas, axis=1)
 
-            plt.fill_between(cuts, betas_mean - betas_std, betas_mean + betas_std, alpha=0.1, color='k')
-            plt.title(f"Betas: T {self.components1} T {self.components2}")
-            plt.xlabel(r'$|q|_{max}$')
-            plt.show()
+        plt.fill_between(self.cuts, alphas_mean - alphas_std, alphas_mean + alphas_std, alpha=0.1, color='k')
+        plt.title(f"Alphas: T {self.components1} T {self.components2}")
+        plt.xlabel(r'$|q|_{max}$')
+        plt.show()
 
-            plt.fill_between(cuts, etas_mean - etas_std, etas_mean + etas_std, alpha=0.1, color='k')
-            plt.title(f"Etas: T {self.components1} T {self.components2}")
-            plt.xlabel(r'$|q|_{max}$')
-            plt.show()
+        plt.fill_between(self.cuts, betas_mean - betas_std, betas_mean + betas_std, alpha=0.1, color='k')
+        plt.title(f"Betas: T {self.components1} T {self.components2}")
+        plt.xlabel(r'$|q|_{max}$')
+        plt.show()
+
+        plt.fill_between(self.cuts, etas_mean - etas_std, etas_mean + etas_std, alpha=0.1, color='k')
+        plt.title(f"Etas: T {self.components1} T {self.components2}")
+        plt.xlabel(r'$|q|_{max}$')
+        plt.show()
 
         if plot_errors:
             color_sys = 'k'
@@ -272,12 +307,12 @@ class analysis():
 
             ax1.set_xlabel(r'$|q|_{max}$', rotation=0)
             ax1.set_ylabel(r'$\frac{\Delta \alpha}{\gamma}$', color=color_sys, rotation=0, **axis_font)
-            lns1 = ax1.plot(cuts, alphas_mean, color=color_sys, label=f'systematic error')
+            lns1 = ax1.plot(self.cuts, alphas_mean, color=color_sys, label=f'systematic error')
             ax1.tick_params(axis='y', labelcolor=color_sys)
 
             ax2 = ax1.twinx()
             ax2.set_ylabel(r'$\frac{\sigma_\alpha}{\epsilon}$', color=color_stat, rotation=0, **axis_font)  # we already handled the x-label with ax1
-            lns2 = ax2.plot(cuts, alphas_std, color='b', label='statistical error')
+            lns2 = ax2.plot(self.cuts, alphas_std, color='b', label='statistical error')
             ax2.tick_params(axis='y', labelcolor=color_stat)
 
             lns = lns1 + lns2
@@ -292,12 +327,12 @@ class analysis():
 
             ax1.set_xlabel(r'$|q|_{max}$', rotation=0)
             ax1.set_ylabel(r'$\frac{\Delta \beta}{\gamma}$', color=color_sys, rotation=0, **axis_font)
-            lns1 = ax1.plot(cuts, betas_mean, color=color_sys, label=f'systematic error')
+            lns1 = ax1.plot(self.cuts, betas_mean, color=color_sys, label=f'systematic error')
             ax1.tick_params(axis='y', labelcolor=color_sys)
 
             ax2 = ax1.twinx()
             ax2.set_ylabel(r'$\frac{\sigma_\beta}{\epsilon}$', color=color_stat, rotation=0, **axis_font)  # we already handled the x-label with ax1
-            lns2 = ax2.plot(cuts, betas_std, color='b', label='statistical error')
+            lns2 = ax2.plot(self.cuts, betas_std, color='b', label='statistical error')
             ax2.tick_params(axis='y', labelcolor=color_stat)
 
             lns = lns1 + lns2
@@ -312,12 +347,12 @@ class analysis():
 
             ax1.set_xlabel(r'$|q|_{max}$', rotation=0)
             ax1.set_ylabel(r'$\frac{\Delta \eta}{\gamma}$', color=color_sys, rotation=0, **axis_font)
-            lns1 = ax1.plot(cuts, etas_mean, color=color_sys, label=f'systematic error')
+            lns1 = ax1.plot(self.cuts, etas_mean, color=color_sys, label=f'systematic error')
             ax1.tick_params(axis='y', labelcolor=color_sys)
 
             ax2 = ax1.twinx()
             ax2.set_ylabel(r'$\frac{\sigma_\eta}{\epsilon}$', color=color_stat, rotation=0, **axis_font)  # we already handled the x-label with ax1
-            lns2 = ax2.plot(cuts, etas_std, color='b', label='statistical error')
+            lns2 = ax2.plot(self.cuts, etas_std, color='b', label='statistical error')
             ax2.tick_params(axis='y', labelcolor=color_stat)
 
             lns = lns1 + lns2
@@ -329,3 +364,38 @@ class analysis():
             plt.show()
 
         return alphas, betas, etas
+
+    def plot_fit_1D(self, cut):
+        # Make the momentum data 1 dimensional
+        mom_data = self.mom_data[(0, ) * (self.fitting_dims - 1)]
+        correlator_p = self.correlator_p[(0, ) * (self.fitting_dims - 1)]
+        Laplace_p = self.Laplace_p[(0, ) * (self.fitting_dims - 1)]
+
+        keep = numpy.logical_and(self.q_s <= cut + 10 ** -15, self.q_s > 0)
+        q_s = self.q_s[keep]
+
+        mom_data_keep = mom_data[:, keep]
+        correlator_p_keep = correlator_p[:, keep]
+        Laplace_p_keep = Laplace_p[:, keep]
+
+        mom_data_mean = numpy.mean(mom_data_keep, axis=0)
+        mom_data_std = numpy.std(mom_data_keep, axis=0) / numpy.sqrt(self.no_configs)
+        correlator_p_mean = numpy.mean(correlator_p_keep, axis=0)
+        correlator_p_std = numpy.std(correlator_p_keep, axis=0) / numpy.sqrt(self.no_configs)
+        Laplace_p_mean = numpy.mean(Laplace_p_keep, axis=0)
+        Laplace_p_std = numpy.std(Laplace_p_keep, axis=0) / numpy.sqrt(self.no_configs)
+
+        plt.plot(q_s, correlator_p_mean, label='FT')
+        plt.fill_between(q_s, correlator_p_mean - correlator_p_std, correlator_p_mean + correlator_p_std, alpha=0.1)
+
+        plt.plot(q_s, Laplace_p_mean, label='LT')
+        plt.fill_between(q_s, Laplace_p_mean - Laplace_p_std, Laplace_p_mean + Laplace_p_std, alpha=0.1)
+
+        plt.plot(q_s, mom_data_mean, label='total')
+        plt.fill_between(q_s, mom_data_mean - mom_data_std, mom_data_mean + mom_data_std, alpha=0.1)
+
+        plt.legend()
+
+        plt.show()
+        
+        pdb.set_trace()

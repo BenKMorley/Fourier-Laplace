@@ -7,6 +7,7 @@ from scipy.optimize import minimize, least_squares
 from tqdm import tqdm
 from multiprocessing import Pool
 import pickle
+import pdb
 from copy import copy
 from functools import reduce
 
@@ -33,21 +34,25 @@ def analytic(L, dim, N, g, alpha, beta, gamma, eta):
         numpy.log(q_sq / g ** 2, out=numpy.zeros_like(q_sq), where=q_sq != 0) + gamma) + eta
 
 
-def Laplace_Transform_ND(data, dim, offset):
+def Laplace_Transform_ND(data, dim, offset, x_max=numpy.inf):
     L = data.shape[0]
     q_fac = 2 * numpy.pi / L
     p_s = numpy.arange(L) * q_fac
     assert len(offset) == dim
 
-    # prefactor = numpy.divide(1, 1 - numpy.exp(-p_s * L), out=numpy.zeros_like(p_s), where=p_s!=0)
-
     result = numpy.zeros((L, ) * dim)
 
     for d in range(dim):
-        x_s = (numpy.arange(L) + offset[d]) % L - offset[d]
+        data_new = numpy.zeros((L, ) * dim)
 
+        x_s = (numpy.arange(L) + offset[d]) % L - offset[d]
         comb = numpy.outer(p_s, x_s)
-        # factor = prefactor.reshape((L, 1)).repeat(L, axis=1) * numpy.exp(-comb)
+        exp_comb = numpy.exp(-comb)
+
+        # We only need to use points at x = (-1, 0, 1). We therefore may choose to remove points
+        # to reduce the noise in the Laplace Transform
+        remove = x_s > x_max
+        exp_comb[:, remove] = 0
 
         # if dim == 2:
         #     data_new = numpy.zeros_like(data)
@@ -56,9 +61,38 @@ def Laplace_Transform_ND(data, dim, offset):
         #             for k in range(L):
         #                 data_new[i, j] += numpy.exp(-comb)[i, k] * data[k, j]
 
-        data = numpy.tensordot(numpy.exp(-comb), data, axes=(1, d))
+        data = numpy.tensordot(exp_comb, data, axes=(1, d))
+
+    # Let D represent data and e represent the exponential comb. Use indices i, j, k to represent
+    # momentum space indices and x, y, z to represent position space indices
+    # D_ijk = e_i^z D_jkz = e_i^z e_j^y D_kyz = e_k^x D_xyz
+    # We see that the 0th and 2nd axes of the data have swapped positions - let's fix that
+    for i in range(dim // 2 - 1):
+        numpy.swapaxes(data, i, dim - i)
 
     return data
+
+
+def Laplace_Transform_1D(data, dim, offset, x_max=numpy.inf):
+    L = data.shape[0]
+    q_fac = 2 * numpy.pi / L
+    p_s = numpy.arange(L) * q_fac
+
+    result = numpy.zeros(L)
+
+    # Project out the other dimensions
+    data = data[-1, -1] + data[-1, 0] + data[-1, 1] + data[0, -1] + data[0, 0] + data[0, 1] + data[1, -1] + data[1, 0] + data[1, 1]
+
+    x_s = (numpy.arange(L) + offset) % L - offset
+    remove = x_s > x_max
+
+    for i, p in enumerate(p_s):
+        exp_comb = numpy.exp(-p * x_s)
+        exp_comb[remove] = 0
+
+        result[i] = numpy.sum(exp_comb * data)
+
+    return result
 
 
 def analysis_ND_Laplace(params, L, N=2, dim=3, g=0.1, no_samples=500, plot=False):
