@@ -7,7 +7,6 @@ import sys
 import os
 import re
 import pdb
-from Joseph_comparison import Laplace_Transform_ND, Laplace_Transform_1D
 
 # Import from the Core directory
 sys.path.append(os.getcwd() + '/..')
@@ -18,11 +17,58 @@ sys.path.append(os.getcwd() + '/Core')
 from Core.MISC import GRID_convention_g, GRID_convention_L, GRID_convention_m, GRID_convention_N
 
 
+def Laplace_Transform_ND(data, dim, offset, x_max=numpy.inf):
+    L = data.shape[0]
+    q_fac = 2 * numpy.pi / L
+    p_s = numpy.arange(L) * q_fac
+    assert len(offset) == dim
+
+    for d in range(dim):
+        x_s = (numpy.arange(L) + offset[d]) % L - offset[d]
+        comb = numpy.outer(p_s, x_s)
+        exp_comb = numpy.exp(-comb)
+
+        # We only need to use points at x = (-1, 0, 1). We therefore may choose to remove points
+        # to reduce the noise in the Laplace Transform
+        remove = x_s > x_max
+        exp_comb[:, remove] = 0
+
+        # Let D represent data and e represent the exponential comb. Use indices i, j, k to represent
+        # momentum space indices and x, y, z to represent position space indices
+        # D_ijk = D_zij e_k^z = (D_yzi e_j^y) e_k^z = ((D_xyz e_i^x) e_j^y) e_k^z
+        data = numpy.tensordot(data, exp_comb, axes=(0, 1))
+
+    return data
+
+
+def Laplace_Transform_1D(data, dim, offset, x_max=numpy.inf):
+    L = data.shape[0]
+    q_fac = 2 * numpy.pi / L
+    p_s = numpy.arange(L) * q_fac
+
+    result = numpy.zeros(L)
+
+    # Project out the other dimensions
+    data = data[-1, -1] + data[-1, 0] + data[-1, 1] + data[0, -1] + data[0, 0] + data[0, 1] + data[1, -1] + data[1, 0] + data[1, 1]
+
+    x_s = (numpy.arange(L) + offset) % L - offset
+    remove = x_s > x_max
+
+    for i, p in enumerate(p_s):
+        exp_comb = numpy.exp(-p * x_s)
+        exp_comb[remove] = 0
+
+        result[i] = numpy.sum(exp_comb * data)
+
+    return result
+
+
 class analysis():
-    def __init__(self, L, N, g, m, components1, components2, no_samples=100, base_dir="/mnt/drive2/Fourier-Laplace/data", fitting_dims=1, x_max=1, dim=3):
+    def __init__(self, L, N, g, m, components1, components2, no_samples=100, base_dir="/mnt/drive2/Fourier-Laplace/data", fitting_dims=1, x_max=1, dim=3, szm=False):
         self.N = N
         self.L = L
         self.g = g
+        self.subtract_zero_mom = szm
         self.dim = dim
         self.x_max = x_max
         self.fitting_dims = fitting_dims
@@ -125,7 +171,7 @@ class analysis():
                 configs2.append(config)
 
         # We only want configs that have both correlators
-        self.configs = numpy.sort(numpy.array(list(set(configs1).intersection(set(configs2)))))[:50]
+        self.configs = numpy.sort(numpy.array(list(set(configs1).intersection(set(configs2)))))
 
         self.no_configs = len(self.configs)
 
@@ -134,16 +180,19 @@ class analysis():
         x2, y2 = self.components2
 
         # Reshape the data which has been saved linearlly
-        data_1 = numpy.loadtxt(f"{self.directory}/emtc_{x1}_{y1}_{config}_real.txt").reshape((self.L, self.L, self.L))
-        data_2 = numpy.loadtxt(f"{self.directory}/emtc_{x2}_{y2}_{config}_real.txt").reshape((self.L, self.L, self.L))
+        T_1 = numpy.loadtxt(f"{self.directory}/emtc_{x1}_{y1}_{config}_real.txt").reshape((self.L, self.L, self.L))
+        T_2 = numpy.loadtxt(f"{self.directory}/emtc_{x2}_{y2}_{config}_real.txt").reshape((self.L, self.L, self.L))
 
-        data_1_p = fftn(data_1)
+        T_1_p = fftn(T_1)
 
         # Use the opposite momentum for the second correlator - do this by taking the conjugate
-        data_2_p = numpy.conj(fftn(data_2))
+        T_2_p = numpy.conj(fftn(T_2))
 
         # Correlator is given by the product of these two variables
-        result = data_1_p * data_2_p
+        result = T_1_p * T_2_p
+
+        if self.subtract_zero_mom:
+            result = result - result[0, 0, 0]
 
         return result
 
@@ -155,9 +204,9 @@ class analysis():
         x2, y2 = self.components2
 
         try:
-            self.mom_data = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_mom_data_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}.npy")
-            self.correlator_p = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_correlator_p_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}.npy")
-            self.Laplace_p = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_Laplace_p_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}.npy")
+            self.mom_data = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_mom_data_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}_szm{self.subtract_zero_mom}.npy")
+            self.correlator_p = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_correlator_p_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}_szm{self.subtract_zero_mom}.npy")
+            self.Laplace_p = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_Laplace_p_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}_szm{self.subtract_zero_mom}.npy")
 
         except Exception:
             rerun = True
@@ -166,15 +215,12 @@ class analysis():
             for i, config in tqdm(enumerate(self.configs)):
                 correlator_p = self.get_mom_space_one_config(config)
 
-                # Subtract the zero mode
-                correlator_p = correlator_p - numpy.mean(correlator_p)
-
                 # Get the correlator in position space
                 correlator_x = ifftn(correlator_p)
 
                 # Take the Laplace Transform
                 Laplace_p = Laplace_Transform_ND(correlator_x, self.dim, (1, ) * self.dim, x_max=self.x_max)
-                Laplace_p2 = Laplace_Transform_1D(correlator_x, self.dim, 1, x_max=self.x_max)
+                Laplace_p2 = Laplace_Transform_1D(correlator_x, self.dim, 1, x_max=1)
                 pdb.set_trace()
 
                 # Keep a lower dimensional sample of the correlator
@@ -184,9 +230,9 @@ class analysis():
             # Add the two contributions together
             self.mom_data = self.Laplace_p + self.correlator_p
 
-            numpy.save(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_mom_data_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}.npy", self.mom_data)
-            numpy.save(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_correlator_p_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}.npy", self.correlator_p)
-            numpy.save(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_Laplace_p_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}.npy", self.Laplace_p)
+            numpy.save(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_mom_data_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}_szm{self.subtract_zero_mom}.npy", self.mom_data)
+            numpy.save(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_correlator_p_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}_szm{self.subtract_zero_mom}.npy", self.correlator_p)
+            numpy.save(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_Laplace_p_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}_szm{self.subtract_zero_mom}.npy", self.Laplace_p)
 
     def get_fit_params(self, rerun=False):
         num_cuts = len(self.cuts)
@@ -378,6 +424,11 @@ class analysis():
         correlator_p_keep = correlator_p[:, keep]
         Laplace_p_keep = Laplace_p[:, keep]
 
+        # Subtract the p = 1 value from each
+        correlator_p_keep = correlator_p_keep - correlator_p_keep[:, 0].reshape((self.no_configs, 1)).repeat(sum(keep), axis=1)
+        mom_data_keep = mom_data_keep - mom_data_keep[:, 0].reshape((self.no_configs, 1)).repeat(sum(keep), axis=1)
+        Laplace_p_keep = Laplace_p_keep - Laplace_p_keep[:, 0].reshape((self.no_configs, 1)).repeat(sum(keep), axis=1)
+
         mom_data_mean = numpy.mean(mom_data_keep, axis=0)
         mom_data_std = numpy.std(mom_data_keep, axis=0) / numpy.sqrt(self.no_configs)
         correlator_p_mean = numpy.mean(correlator_p_keep, axis=0)
@@ -394,8 +445,13 @@ class analysis():
         plt.plot(q_s, mom_data_mean, label='total')
         plt.fill_between(q_s, mom_data_mean - mom_data_std, mom_data_mean + mom_data_std, alpha=0.1)
 
+        plt.xlabel("a p")
         plt.legend()
 
+        x1, y1 = self.components1
+        x2, y2 = self.components2
+
+        # plt.savefig(f"Local/graphs/emtc_{x1}_{y1}_emtc_{x2}_{y2}_mom_data_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}_szm{self.subtract_zero_mom}.pdf")
         plt.show()
-        
+
         pdb.set_trace()
