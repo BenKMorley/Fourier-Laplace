@@ -19,10 +19,14 @@ from Core.Laplace import Laplace_Transform_1D, Laplace_Transform_ND
 
 
 class analysis():
-    def __init__(self, L, N, g, m, components1, components2, no_samples=100, base_dir="/mnt/drive2/Fourier-Laplace/data", fitting_dims=1, x_max=1, dim=3, szm=False):
+    def __init__(self, L, N, g, m, components1, components2, no_samples=100,
+                 base_dir="/mnt/drive2/Fourier-Laplace/data", fitting_dims=1,
+                 x_max=1, dim=3, szm=False, raw_data_type='txt', result_type='h5',
+                 have_result_data=False):
         self.N = N
         self.L = L
         self.g = g
+        self.m = m
         self.subtract_zero_mom = szm
         self.dim = dim
         self.x_max = x_max
@@ -30,7 +34,10 @@ class analysis():
         self.no_samples = no_samples
         self.components1 = components1
         self.components2 = components2
-        self.directory = f"{base_dir}/{GRID_convention_g(g)}/{GRID_convention_N(N)}/{GRID_convention_L(L)}/{GRID_convention_m(m)}/config"
+        self.directory = f"{base_dir}/{GRID_convention_g(g)}/{GRID_convention_N(N)}/{GRID_convention_L(L)}/{GRID_convention_m(m)}"
+        self.raw_data_type = raw_data_type
+        self.result_type = result_type
+        self.have_result_data = have_result_data
 
         self.q_s = (numpy.arange(self.L) + self.L // 2) % self.L - self.L // 2
         self.q_s = self.q_s * numpy.pi * 2 / L
@@ -47,8 +54,11 @@ class analysis():
         # Bootstrap indices used in analyses
         self.indices = numpy.random.randint(len(self.configs), size=(self.no_samples, len(self.configs)))
 
-        # Find the momentum space values of the correlators. This is needed in all analysis
-        self.get_p_space()
+        self.result_index = None
+
+        const_data = numpy.ones((self.L, self.L, self.L))
+        self.const_LT = Laplace_Transform_ND(const_data, 3, [1, 1, 1])
+
 
     def analytic(self, alpha, beta, gamma, eta):
         q_sq = self.q_hat_sq
@@ -108,40 +118,128 @@ class analysis():
         self.data_q_eta = data_q_FT_eta + data_q_LT_eta
 
     def detect_configs(self):
-        files = list(os.popen(f'ls {self.directory}/emtc*'))
-        x1, y1 = self.components1
-        x2, y2 = self.components2
+        if self.have_result_data:
+            filestem = f'cosmhol-su{self.N}_L{self.L}_g{self.g}_m2{self.m}-FL'
 
-        configs1 = []
-        configs2 = []
+            files = list(os.popen(f'ls {self.directory}/FL/{filestem}*'))
 
-        for name in files:
-            if (len(re.findall(rf'emtc_{x1}_{y1}_\d+_real', name)) != 0):
-                config = int(re.findall(r'\d+_real', name)[0][:-5])
-                configs1.append(config)
+            configs = []
+            for name in files:
+                if (len(re.findall(rf'{filestem}.\d+.h5', name)) != 0):
+                    config = int(re.findall(r'\d+.h5', name)[0][:-3])
 
-        for name in files:
-            if (len(re.findall(rf'emtc_{x2}_{y2}_\d+_real', name)) != 0):
-                config = int(re.findall(r'\d+_real', name)[0][:-5])
-                configs2.append(config)
+                    configs.append(config)
 
-        # We only want configs that have both correlators
-        self.configs = numpy.sort(numpy.array(list(set(configs1).intersection(set(configs2)))))
+            self.configs = numpy.sort(numpy.array(configs))
+
+        else:
+            files = list(os.popen(f'ls {self.directory}/config/emtc*'))
+            x1, y1 = self.components1
+            x2, y2 = self.components2
+
+            configs1 = []
+            configs2 = []
+
+            for name in files:
+                if (len(re.findall(rf'emtc_{x1}_{y1}_\d+_real', name)) != 0):
+                    config = int(re.findall(r'\d+_real', name)[0][:-5])
+                    configs1.append(config)
+
+            for name in files:
+                if (len(re.findall(rf'emtc_{x2}_{y2}_\d+_real', name)) != 0):
+                    config = int(re.findall(r'\d+_real', name)[0][:-5])
+                    configs2.append(config)
+
+            # We only want configs that have both correlators
+            self.configs = numpy.sort(numpy.array(list(set(configs1).intersection(set(configs2)))))
 
         self.no_configs = len(self.configs)
 
-    def get_mom_space_one_config(self, config):
+    def load_raw_data_txt(self, config):
         x1, y1 = self.components1
         x2, y2 = self.components2
 
         # Reshape the data which has been saved linearlly
-        T_1 = numpy.loadtxt(f"{self.directory}/emtc_{x1}_{y1}_{config}_real.txt").reshape((self.L, self.L, self.L))
-        T_2 = numpy.loadtxt(f"{self.directory}/emtc_{x2}_{y2}_{config}_real.txt").reshape((self.L, self.L, self.L))
+        T_1 = numpy.loadtxt(f"{self.directory}/config/emtc_{x1}_{y1}_{config}_real.txt").reshape((self.L, self.L, self.L))
+        T_2 = numpy.loadtxt(f"{self.directory}/config/emtc_{x2}_{y2}_{config}_real.txt").reshape((self.L, self.L, self.L))
 
-        T_1_p = fftn(T_1)
+        return T_1, T_2
+
+    def load_raw_data(self, config):
+        if self.raw_data_type == 'txt':
+            self.load_raw_data_txt(config)
+
+        else:
+            raise ValueError('data_type not compatible with available types')
+
+    def load_result_data_h5(self):
+        import h5py
+
+        result_file = lambda config: f'cosmhol-su{self.N}_L{self.L}_g{self.g}_m2{self.m}-FL.{config}.h5'
+
+        # Find which entries of the h5 dataset have the components we're interested in
+        if self.result_index is None:
+            with h5py.File(f'{self.directory}/FL_20211214/{result_file(self.configs[0])}') as f:
+                for i in range(len(f['FL'].keys())):
+                    x_ = re.findall(r'_\d+', f['FL'][f'FL_{i}'].attrs['source'][0].astype(str))
+                    y_ = re.findall(r'_\d+', f['FL'][f'FL_{i}'].attrs['sink'][0].astype(str))
+
+                    x = tuple([int(i[1:]) for i in x_])
+                    y = tuple([int(i[1:]) for i in y_])
+
+                    if x == self.components1 and y == self.components2:
+                        self.result_index = i
+                        break
+
+            if self.result_index is None:
+                raise FileNotFoundError("h5 data file doesn't contain appropriate components")
+
+        self.correlator_p = []
+        self.correlator_x = []
+        self.Laplace_p = []
+
+        for config in tqdm(self.configs):
+            with h5py.File(f'{self.directory}/FL_20211214/{result_file(config)}') as f:
+                i = self.result_index
+                self.Laplace_p.append(f['FL'][f'FL_{i}']['Laplace_p'][()])
+                self.correlator_x.append(f['FL'][f'FL_{i}']['correlator_x'][()])
+                self.correlator_p.append(f['FL'][f'FL_{i}']['correlator_p'][()])
+
+        self.correlator_p = numpy.array(self.correlator_p)['re'] + 1j * numpy.array(self.correlator_p)['im']
+        self.Laplace_p = numpy.array(self.Laplace_p)['re'] + 1j * numpy.array(self.Laplace_p)['im']
+        self.correlator_x = numpy.array(self.correlator_x)['re'] + 1j * numpy.array(self.correlator_x)['im']
+
+        # Laplace data only calcualated for low momenta
+        r = self.Laplace_p.shape[1]
+
+        self.correlator_p = self.correlator_p[:, :r, :r]
+        self.mom_data = self.correlator_p + self.Laplace_p
+
+    def load_result_data_npy(self):
+        x1, y1 = self.components1
+        x2, y2 = self.components2
+
+        self.mom_data = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_mom_data_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}_szm{self.subtract_zero_mom}.npy")
+        self.correlator_p = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_correlator_p_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}_szm{self.subtract_zero_mom}.npy")
+        self.Laplace_p = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_Laplace_p_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}_szm{self.subtract_zero_mom}.npy")
+
+    def load_result_data(self):
+        if self.result_type == 'npy':
+            self.load_result_data_npy()
+
+        elif self.result_type == 'h5':
+            self.load_result_data_h5()
+
+        else:
+            raise ValueError('Please use a supported file type')
+
+    def get_mom_space_one_config(self, config):
+        self.load_raw_data(config)
+
+        T_1_p = fftn(self.T_1)
 
         # Use the opposite momentum for the second correlator - do this by taking the conjugate
-        T_2_p = numpy.conj(fftn(T_2))
+        T_2_p = numpy.conj(fftn(self.T_2))
 
         # Correlator is given by the product of these two variables
         result = T_1_p * T_2_p
@@ -151,17 +249,15 @@ class analysis():
 
         return result
 
-    def get_p_space(self, rerun=False):
-        self.Laplace_p = numpy.zeros((self.no_configs, ) + (self.L, ) * self.fitting_dims)
-        self.correlator_p = numpy.zeros((self.no_configs, ) + (self.L, ) * self.fitting_dims)
-
+    def get_p_space(self, rerun=False, N=None):
         x1, y1 = self.components1
         x2, y2 = self.components2
 
+        if N is not None:
+            self.configs = self.configs[:N]
+
         try:
-            self.mom_data = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_mom_data_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}_szm{self.subtract_zero_mom}.npy")
-            self.correlator_p = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_correlator_p_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}_szm{self.subtract_zero_mom}.npy")
-            self.Laplace_p = numpy.load(f"Local/data/emtc_{x1}_{y1}_emtc_{x2}_{y2}_Laplace_p_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}_szm{self.subtract_zero_mom}.npy")
+            self.load_result_data()
 
         except Exception:
             rerun = True
@@ -175,8 +271,6 @@ class analysis():
 
                 # Take the Laplace Transform
                 Laplace_p = Laplace_Transform_ND(correlator_x, self.dim, (1, ) * self.dim, x_max=self.x_max)
-                Laplace_p2 = Laplace_Transform_1D(correlator_x, self.dim, 1, x_max=1)
-                pdb.set_trace()
 
                 # Keep a lower dimensional sample of the correlator
                 self.Laplace_p[i] = Laplace_p[(0, ) * (self.dim - self.fitting_dims)]
@@ -368,9 +462,13 @@ class analysis():
 
     def plot_fit_1D(self, cut):
         # Make the momentum data 1 dimensional
-        mom_data = self.mom_data[(0, ) * (self.fitting_dims - 1)]
-        correlator_p = self.correlator_p[(0, ) * (self.fitting_dims - 1)]
-        Laplace_p = self.Laplace_p[(0, ) * (self.fitting_dims - 1)]
+        if self.fitting_dims == 2:
+            mom_data = self.mom_data[:, 0].real
+            correlator_p = self.correlator_p[:, 0].real
+            Laplace_p = self.Laplace_p[:, 0].real
+
+        size = self.mom_data.shape[1]
+        self.q_s = self.q_s[:size]
 
         keep = numpy.logical_and(self.q_s <= cut + 10 ** -15, self.q_s > 0)
         q_s = self.q_s[keep]
@@ -379,10 +477,20 @@ class analysis():
         correlator_p_keep = correlator_p[:, keep]
         Laplace_p_keep = Laplace_p[:, keep]
 
+        # # Let's try and get rid of the effect of the constant from the Laplace Transform
+        def minimize_me(const):
+            return self.get_constant_contributions(const, cut)
+
+        from scipy.optimize import minimize_scalar
+        opt_res = minimize_scalar(minimize_me)
+
+        Laplace_full = self.get_constant_contributions(opt_res.x, cut) - Laplace_p_keep
+        pdb.set_trace()
+
         # Subtract the p = 1 value from each
-        correlator_p_keep = correlator_p_keep - correlator_p_keep[:, 0].reshape((self.no_configs, 1)).repeat(sum(keep), axis=1)
-        mom_data_keep = mom_data_keep - mom_data_keep[:, 0].reshape((self.no_configs, 1)).repeat(sum(keep), axis=1)
-        Laplace_p_keep = Laplace_p_keep - Laplace_p_keep[:, 0].reshape((self.no_configs, 1)).repeat(sum(keep), axis=1)
+        # correlator_p_keep = correlator_p_keep - correlator_p_keep[:, 0].reshape((self.no_configs, 1)).repeat(sum(keep), axis=1)
+        # mom_data_keep = mom_data_keep - mom_data_keep[:, 0].reshape((self.no_configs, 1)).repeat(sum(keep), axis=1)
+        # Laplace_p_keep = Laplace_p_keep - Laplace_p_keep[:, 0].reshape((self.no_configs, 1)).repeat(sum(keep), axis=1)
 
         mom_data_mean = numpy.mean(mom_data_keep, axis=0)
         mom_data_std = numpy.std(mom_data_keep, axis=0) / numpy.sqrt(self.no_configs)
@@ -406,7 +514,24 @@ class analysis():
         x1, y1 = self.components1
         x2, y2 = self.components2
 
-        # plt.savefig(f"Local/graphs/emtc_{x1}_{y1}_emtc_{x2}_{y2}_mom_data_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}_szm{self.subtract_zero_mom}.pdf")
         plt.show()
 
-        pdb.set_trace()
+        # plt.savefig(f"Local/graphs/emtc_{x1}_{y1}_emtc_{x2}_{y2}_mom_data_L{self.L}_configs{self.no_configs}_dims{self.fitting_dims}_xmax{self.x_max}_szm{self.subtract_zero_mom}.pdf")
+
+    def get_constant_contributions(self, const, cut):
+        # Make the momentum data 1 dimensional
+        if self.fitting_dims == 2:
+            Laplace_p = self.Laplace_p[:, 0].real
+
+        size = self.mom_data.shape[1]
+        self.q_s = self.q_s[:size]
+
+        keep = numpy.logical_and(self.q_s <= cut + 10 ** -15, self.q_s > 0)
+
+        Laplace_p_keep = Laplace_p[:, keep]
+
+        const_LT_keep = self.const_LT[0, 0, :size][keep] * const
+
+        Laplace_p_mean = numpy.mean(Laplace_p_keep, axis=0) - const_LT_keep
+
+        return numpy.sum(numpy.abs(Laplace_p_mean))
