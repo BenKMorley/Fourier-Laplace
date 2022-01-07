@@ -1,3 +1,5 @@
+Server/run*
+Server/parameters.py
 *cpython*
 Local/run*
 Local/data/*

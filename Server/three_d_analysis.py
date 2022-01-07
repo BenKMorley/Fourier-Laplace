@@ -9,17 +9,16 @@ import re
 import pdb
 
 # Import from the Core directory
-sys.path.append(os.getcwd() + '/..')
-sys.path.append(os.getcwd() + '/../Core')
 sys.path.append(os.getcwd())
 sys.path.append(os.getcwd() + '/Core')
+
+from Server.parameters import FL_dir
 
 from Core.MISC import GRID_convention_g, GRID_convention_L, GRID_convention_m, GRID_convention_N
 from Core.Laplace import Laplace_Transform_1D, Laplace_Transform_ND
 
-
 class analysis_3D_one_config(object):
-    def __init__(self, L, N, g, m, components1, components2, config, base_dir="/mnt/drive2/Fourier-Laplace/data"):
+    def __init__(self, L, N, g, m, components1, components2, config, base_dir=FL_dir):
         self.N = N
         self.L = L
         self.g = g
@@ -27,7 +26,7 @@ class analysis_3D_one_config(object):
         self.components1 = components1
         self.components2 = components2
         self.config = config
-        self.directory = f"{base_dir}/{GRID_convention_g(g)}/{GRID_convention_N(N)}/{GRID_convention_L(L)}/{GRID_convention_m(m)}/FL_3D/"
+        self.directory = f"{base_dir}/{GRID_convention_g(g)}/{GRID_convention_N(N)}/{GRID_convention_L(L)}/{GRID_convention_m(m)}/FL/"
 
         self.load_in_data()
         self.get_x_correlator()
