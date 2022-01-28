@@ -31,10 +31,30 @@ def combine(N, g, L, m, T0, T1, x_max):
 
     full_data_Laplace = numpy.zeros((len(configs), L))
     full_data_Fourier = numpy.zeros((len(configs), L))
+    full_data_correlator_x = numpy.zeros((len(configs), L))
+    correlator_x_3D = numpy.zeros((L, L, L), dtype=numpy.complex128)
+    correlator_p_3D = numpy.zeros((L, L, L), dtype=numpy.complex128)
+    Laplace_p_3D = numpy.zeros((L, L, L), dtype=numpy.complex128)
+
 
     for i, config in tqdm(enumerate(configs)):
         data = numpy.load(f'Server/data/Laplace_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_config{config}_xmax{x_max:.1f}.npy')
-        full_data_Laplace[i] = data
+        # full_data_Laplace[i] = data
+        Laplace_p_3D += data / len(configs)
+
+        try:
+            data = numpy.load(f'Server/data/Correlator_x_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_config{config}.npy')
+            correlator_x_3D += data / len(configs)
+
+        except Exception:
+            print(f"No correlator data found config = {config}")
+
+        try:
+            data = numpy.load(f'Server/data/Correlator_p_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_config{config}.npy')
+            correlator_p_3D += data / len(configs)
+
+        except Exception:
+            print(f"No correlator data found config = {config}")
 
         directory = f"{FL_dir}/{GRID_convention_g(g)}/{GRID_convention_N(N)}/{GRID_convention_L(L)}/{GRID_convention_m(m)}/FL/"
         result_file = f'cosmhol-su{N}_L{L}_g{g}_m2{m}-FL.{config}.h5'
@@ -44,8 +64,13 @@ def combine(N, g, L, m, T0, T1, x_max):
         Fourier = f['FL'][f'FL_{result_index}']['P_FULL_3D'][()][0, 0]['re']
         full_data_Fourier[i] = Fourier
     
-    numpy.save(f'Server/data/full_data/Laplace_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_xmax{x_max:.1f}.npy', full_data_Laplace)
-    numpy.save(f'Server/data/full_data/Fourier_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_xmax{x_max:.1f}.npy', full_data_Fourier)
+    # numpy.save(f'Server/data/full_data/Laplace_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_xmax{x_max:.1f}.npy', full_data_Laplace)
+    # numpy.save(f'Server/data/full_data/Fourier_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}.npy', full_data_Fourier)
+    # numpy.save(f'Server/data/full_data/Correlator_x_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}.npy', full_data_correlator_x)
+    numpy.save(f'Server/data/full_data/Correlator_x_3d_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}.npy', correlator_x_3D)
+    numpy.save(f'Server/data/full_data/Correlator_p_3d_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}.npy', correlator_p_3D)
+    numpy.save(f'Server/data/full_data/Laplace_p_3d_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}.npy', Laplace_p_3D)
+
 
 
 if __name__ == "__main__":
