@@ -17,60 +17,43 @@ from Server.three_d_analysis import get_result_index
 from Core.MISC import GRID_convention_g, GRID_convention_L, GRID_convention_m, GRID_convention_N
 
 
-def combine(N, g, L, m, T0, T1, x_max):
+def combine(N, g, L, m, T0, T1, x_max, dims):
     base_dir = f"Server/data/"
 
     files = os.popen(f'ls {base_dir}')
     configs = []
 
     for name in files:
-        if len(re.findall(rf'Laplace_N{N}_g{g}_L{L}_m{m}_\({T0[0]}, {T0[1]}\)_\({T1[0]}, {T1[1]}\)_config\d+_xmax{x_max:.1f}.npy',
+        if len(re.findall(rf'Laplace_N{N}_g{g}_L{L}_m{m}_\({T0[0]}, {T0[1]}\)_\({T1[0]}, {T1[1]}\)_config\d+_dims{dims}_xmax{x_max:.1f}.npy',
                           name)) != 0:
             config = int(re.findall(r'config\d+', name)[0][6:])
             configs.append(config)
 
-    full_data_Laplace = numpy.zeros((len(configs), L))
-    full_data_Fourier = numpy.zeros((len(configs), L))
-    full_data_correlator_x = numpy.zeros((len(configs), L))
-    correlator_x_3D = numpy.zeros((L, L, L), dtype=numpy.complex128)
-    correlator_p_3D = numpy.zeros((L, L, L), dtype=numpy.complex128)
-    Laplace_p_3D = numpy.zeros((L, L, L), dtype=numpy.complex128)
-
+    full_data_Laplace = numpy.zeros((len(configs), ) + (L, ) * dims)
+    full_data_Fourier = numpy.zeros((len(configs), ) + (L, ) * dims)
+    full_data_correlator_x = numpy.zeros((len(configs), ) + (L, ) * dims)
 
     for i, config in tqdm(enumerate(configs)):
-        data = numpy.load(f'Server/data/Laplace_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_config{config}_xmax{x_max:.1f}.npy')
-        # full_data_Laplace[i] = data
-        Laplace_p_3D += data / len(configs)
+        data = numpy.load(f'Server/data/Laplace_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_config{config}_dims{dims}_xmax{x_max:.1f}.npy')
+        full_data_Laplace[i] = data
 
         try:
-            data = numpy.load(f'Server/data/Correlator_x_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_config{config}.npy')
-            correlator_x_3D += data / len(configs)
+            data = numpy.load(f'Server/data/Correlator_x_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_config{config}_dims{dims}.npy')
+            full_data_correlator_x[i] = data
 
         except Exception:
             print(f"No correlator data found config = {config}")
 
         try:
-            data = numpy.load(f'Server/data/Correlator_p_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_config{config}.npy')
-            correlator_p_3D += data / len(configs)
+            data = numpy.load(f'Server/data/Correlator_p_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_config{config}_dims{dims}.npy')
+            full_data_Fourier[i] = data
 
         except Exception:
             print(f"No correlator data found config = {config}")
-
-        directory = f"{FL_dir}/{GRID_convention_g(g)}/{GRID_convention_N(N)}/{GRID_convention_L(L)}/{GRID_convention_m(m)}/FL/"
-        result_file = f'cosmhol-su{N}_L{L}_g{g}_m2{m}-FL.{config}.h5'
-
-        f = h5py.File(f'{directory}{result_file}')
-        result_index = get_result_index(f, T0, T1)
-        Fourier = f['FL'][f'FL_{result_index}']['P_FULL_3D'][()][0, 0]['re']
-        full_data_Fourier[i] = Fourier
     
-    # numpy.save(f'Server/data/full_data/Laplace_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_xmax{x_max:.1f}.npy', full_data_Laplace)
-    # numpy.save(f'Server/data/full_data/Fourier_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}.npy', full_data_Fourier)
-    # numpy.save(f'Server/data/full_data/Correlator_x_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}.npy', full_data_correlator_x)
-    numpy.save(f'Server/data/full_data/Correlator_x_3d_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}.npy', correlator_x_3D)
-    numpy.save(f'Server/data/full_data/Correlator_p_3d_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}.npy', correlator_p_3D)
-    numpy.save(f'Server/data/full_data/Laplace_p_3d_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}.npy', Laplace_p_3D)
-
+    numpy.save(f'Server/data/full_data/Laplace_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_xmax{x_max:.1f}_dims{dims}.npy', full_data_Laplace)
+    numpy.save(f'Server/data/full_data/Fourier_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_dims{dims}.npy', full_data_Fourier)
+    numpy.save(f'Server/data/full_data/Correlator_x_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_dims{dims}.npy', full_data_correlator_x)
 
 
 if __name__ == "__main__":
@@ -86,6 +69,7 @@ if __name__ == "__main__":
     parser.add_argument('T1', metavar="T1", type=str)
     parser.add_argument('T2', metavar="T2", type=str)
     parser.add_argument('x_max', metavar="x_max", type=float)
+    parser.add_argument('dims', metavar="dims", type=int)
 
     args = parser.parse_args()
 
@@ -99,4 +83,4 @@ if __name__ == "__main__":
         args.T2 = literal_eval(args.T2)
         count += 1
 
-    combine(args.N, args.g, args.L, args.m, args.T1, args.T2, args.x_max)
+    combine(args.N, args.g, args.L, args.m, args.T1, args.T2, args.x_max, args.dims)
