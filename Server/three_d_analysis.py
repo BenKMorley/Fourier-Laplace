@@ -8,6 +8,7 @@ import os
 import re
 import pdb
 import pickle
+import h5py
 
 # Import from the Core directory
 sys.path.append(os.getcwd())
@@ -58,6 +59,7 @@ class analysis_3D_one_config(object):
         self.load_in_data()
         self.process_p_correlator()
         self.get_x_correlator()
+        self.get_LT()
 
     def load_in_data(self):
         import h5py
@@ -83,6 +85,19 @@ class analysis_3D_one_config(object):
         onept1 = pickle.load(open(f'Server/data/onept_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.components1}.pcl', 'rb'))
         onept2 = pickle.load(open(f'Server/data/onept_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.components2}.pcl', 'rb'))
 
+        # For self consistancy check if the [0, 0, 0] component matches the product of the onept functions
+        onept_dir = f"{FL_dir}/{GRID_convention_g(self.g)}/{GRID_convention_N(self.N)}/{GRID_convention_L(self.L)}/{GRID_convention_m(self.m)}/onept/"
+        f = h5py.File(f'{onept_dir}cosmhol-su{self.N}_L{self.L}_g{self.g}_m2{self.m}-emtc.{self.config}.h5')
+        onept_conf1 = f['emt']['value'][()][self.components1]['re'] + 1j * f['emt']['value'][()][self.components1]['im']
+        onept_conf2 = f['emt']['value'][()][self.components2]['re'] + 1j * f['emt']['value'][()][self.components2]['im']
+
+        try:
+            assert ((self.correlator_p[0, 0, 0] - onept_conf1 * onept_conf2) / self.correlator_p[0, 0, 0]) < 10 ** -12
+
+        except AssertionError:
+            print("Error: Two-Point and onept don't agree")
+            self.correlator_p = numpy.full((self.L, self.L, self.L), numpy.nan, dtype=numpy.complex128)
+
         self.correlator_p[0, 0, 0] -= onept1 * onept2
 
     def get_x_correlator(self):
@@ -106,10 +121,10 @@ class analysis_3D_one_config(object):
         # Recalculate the x correlator
         self.correlator_x = ifftn(self.correlator_p)
 
+# analysis_3D_one_config(256, 2, 0.2, -0.062, (0, 0), (1, 1), 100, x_max=1)
 
 class full_analysis_3D(object):
-    def __init__(self, L, N, g, m, T1, T2, x_max=numpy.inf, offset=(1, 1, 1),
-                 dims=1):
+    def __init__(self, L, N, g, m, T1, T2, x_max, dims, offset=(1, 1, 1), Nboot=500, p_max=1):
         self.N = N
         self.L = L
         self.g = g
@@ -119,44 +134,60 @@ class full_analysis_3D(object):
         self.offset = offset
         self.T1 = T1
         self.T2 = T2
+        self.p_max = p_max
+        self.Nboot = Nboot
+        self.Nboot = 50
 
         self.directory = 'Server/data'
 
         self.load_in_data()
         self.find_momenta()
+        self.generate_fake_data()
+        self.calculate_bootstrap()
+        self.get_covariance_matrix()
+        self.fit()
 
     def find_momenta(self):
+        print('Calculating momenta')
         # Make the q squared and p_hat squared contributions
-        p_s = []  # start as list to append
         p_fac = 2 * numpy.pi / self.L
 
-        for i in range(3):
-            p_part = numpy.arange(self.L).reshape((1, ) * i + (self.L, ) + (1, ) * (2 - i))
+        self.p_hat_sq = {}
+        self.p_sq = {}
+        for dims in range(1, 4):
+            p_s = []  # start as list to append
 
-            # Apply the periodicity of the lattice
-            p_part = (p_part + self.L // 2) % self.L - self.L // 2
-            p_part = p_part * p_fac
+            for i in range(dims):
+                p_part = numpy.arange(self.L).reshape((1, ) * i + (self.L, ) + (1, ) * (dims - 1 - i))
 
-            for j in range(2):
-                p_part.repeat(self.L, axis=i)
+                # Apply the periodicity of the lattice
+                p_part = (p_part + self.L // 2) % self.L - self.L // 2
+                p_part = p_part * p_fac
 
-            p_s.append(p_part)
+                for j in [k for k in range(0, i)] + [k for k in range(i + 1, dims)]:
+                    p_part = p_part.repeat(self.L, axis=j)
 
-        self.p_sq = numpy.zeros((self.L, ) * 3)
-        self.p_hat_sq = numpy.zeros((self.L, ) * 3)
+                p_s.append(p_part)
 
-        for d in range(3):
-            p_hat = 2 * numpy.sin(p_s[d] / 2)
-            self.p_hat_sq += p_hat ** 2
-            self.p_sq += p_s[d] ** 2
+            self.p_sq[dims] = numpy.zeros((self.L, ) * dims)
+            self.p_hat_sq[dims] = numpy.zeros((self.L, ) * dims)
 
-    def analytic(self, alpha, beta, gamma, eta):
-        p_sq = self.p_hat_sq
+            for d in range(dims):
+                p_hat = 2 * numpy.sin(p_s[d] / 2)
+                self.p_hat_sq[dims] += p_hat ** 2
+                self.p_sq[dims] += p_s[d] ** 2
+            
+
+        print('Finished Calculating Momenta')
+
+    def analytic(self, alpha, beta, gamma, eta, dims=3):
+        p_sq = self.p_hat_sq[dims]
 
         return self.N ** 2 * (p_sq / self.g ** 2) * (alpha * numpy.sqrt(p_sq) + beta * self.g * (1 / 2) *
             numpy.log(p_sq / self.g ** 2, out=numpy.zeros_like(p_sq), where=p_sq != 0) + gamma) + eta
 
     def generate_fake_data(self):
+        print('Generating Fake data')
         # Use the linearity of the Fourier and Laplace Transforms to prerun them
         data_p_alpha = self.analytic(1, 0, 0, 0)
         data_p_beta = self.analytic(0, 1, 0, 0)
@@ -179,11 +210,11 @@ class full_analysis_3D(object):
         self.data_p_FT_eta = fftn(self.data_x_eta)[(0, ) * (3 - self.dims)]
         self.data_p_FT_onept = fftn(self.data_x_onept)[(0, ) * (3 - self.dims)]
 
-        self.data_p_LT_alpha = Laplace_Transform_ND(self.data_x_alpha, dim=3, offset=(1, ) * self.dim, x_max=self.x_max)[(0, ) * (3 - self.dims)]
-        self.data_p_LT_beta = Laplace_Transform_ND(self.data_x_beta, dim=3, offset=(1, ) * self.dim, x_max=self.x_max)[(0, ) * (3 - self.dims)]
-        self.data_p_LT_gamma = Laplace_Transform_ND(self.data_x_gamma, dim=3, offset=(1, ) * self.dim, x_max=self.x_max)[(0, ) * (3 - self.dims)]
-        self.data_p_LT_eta = Laplace_Transform_ND(self.data_x_eta, dim=3, offset=(1, ) * self.dim, x_max=self.x_max)[(0, ) * (3 - self.dims)]
-        self.data_p_LT_onept = Laplace_Transform_ND(self.data_x_onept, dim=3, offset=(1, ) * self.dim, x_max=self.x_max)[(0, ) * (3 - self.dims)]
+        self.data_p_LT_alpha = Laplace_Transform_ND(self.data_x_alpha, dim=3, offset=self.offset, x_max=self.x_max)[(0, ) * (3 - self.dims)]
+        self.data_p_LT_beta = Laplace_Transform_ND(self.data_x_beta, dim=3, offset=self.offset, x_max=self.x_max)[(0, ) * (3 - self.dims)]
+        self.data_p_LT_gamma = Laplace_Transform_ND(self.data_x_gamma, dim=3, offset=self.offset, x_max=self.x_max)[(0, ) * (3 - self.dims)]
+        self.data_p_LT_eta = Laplace_Transform_ND(self.data_x_eta, dim=3, offset=self.offset, x_max=self.x_max)[(0, ) * (3 - self.dims)]
+        self.data_p_LT_onept = Laplace_Transform_ND(self.data_x_onept, dim=3, offset=self.offset, x_max=self.x_max)[(0, ) * (3 - self.dims)]
 
         self.data_p_alpha = self.data_p_FT_alpha + self.data_p_LT_alpha
         self.data_p_beta = self.data_p_FT_beta + self.data_p_LT_beta
@@ -197,16 +228,21 @@ class full_analysis_3D(object):
         self.data_x_eta = self.data_x_eta[(0, ) * (3 - self.dims)]
         self.data_x_onept = self.data_x_onept[(0, ) * (3 - self.dims)]
 
-    def load_in_data(self):
-        self.configs = pickle.load(open(f'Server/data/configs_N{self.N}_g{self.g}_L{self.L}_m{self.m}.pcl', 'wb'))
-        self.full_p_correlator = numpy.zeros((len(self.configs),) + (self.L, ) * self.dims)
-        self.full_x_correlator = numpy.zeros((len(self.configs),) + (self.L, ) * self.dims)
-        self.Laplace_p = numpy.zeros((len(self.configs),) + (self.L, ) * self.dims)
+        # Now only take the data upto qmax
+        # self.data_x_alpha = self.data_x_alpha[self.p_sq[self.dims] <= self.p_max]
+        # self.data_x_beta = self.data_x_beta[self.p_sq[self.dims] <= self.p_max]
+        # self.data_x_gamma = self.data_x_gamma[self.p_sq[self.dims] <= self.p_max]
+        # self.data_x_eta = self.data_x_eta[self.p_sq[self.dims] <= self.p_max]
+        # self.data_x_onept = self.data_x_onept[self.p_sq[self.dims] <= self.p_max]
+        print('Finished Generating fake data')
 
-        for i, config in enumerate(self.configs):
-            self.full_p_correlator[i] = numpy.load(f'Server/data/Correlator_p_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}_{self.T2}_config{config}_dims{self.dims}.npy')
-            self.full_x_correlator[i] = numpy.load(f'Server/data/Correlator_x_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}_{self.T2}_config{config}_dims{self.dims}.npy')
-            self.Laplace_p[i] = numpy.load(f'Server/data/Laplace_p_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}_{self.T2}_config{config}_dims{self.dims}.npy')
+    def load_in_data(self):
+        print('Loading in data')
+        self.configs = pickle.load(open(f'Server/data/configs_N{self.N}_g{self.g}_L{self.L}_m{self.m}.pcl', 'rb'))
+
+        self.full_p_correlator = numpy.load(f'Server/data/full_data/Fourier_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}_{self.T2}_dims{self.dims}.npy')
+        self.full_x_correlator = numpy.load(f'Server/data/full_data/Correlator_x_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}_{self.T2}_dims{self.dims}.npy')
+        self.Laplace_p = numpy.load(f'Server/data/full_data/Laplace_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}_{self.T2}_xmax{self.x_max:.1f}_dims{self.dims}.npy')
 
         self.full_data = self.full_p_correlator + self.Laplace_p
 
@@ -217,17 +253,18 @@ class full_analysis_3D(object):
         onept1 = pickle.load(open(f'Server/data/onept_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}.pcl', 'rb'))
         onept2 = pickle.load(open(f'Server/data/onept_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T2}.pcl', 'rb'))
 
-        self.onept = onept1 * onept2 
+        self.onept = onept1 * onept2
+        print('Finished Loading in data')
 
     def calculate_bootstrap(self):
-        bootstraps = numpy.random.randint(len(self.configs), size=(self.num_bootstraps,
-                                                                   len(self.configs)))
+        print('Calculating Bootstrap')
+        bootstraps = numpy.random.randint(len(self.configs), size=(self.Nboot, len(self.configs)))
 
-        self.correlator_p_samples = numpy.zeros((self.num_boostraps, ) + (self.L, ) * (3 - self.dims))
-        self.correlator_x_samples = numpy.zeros((self.num_boostraps, ) + (self.L, ) * (3 - self.dims))
-        self.Laplace_p_samples = numpy.zeros((self.num_boostraps, ) + (self.L, ) * (3 - self.dims))
+        self.correlator_p_samples = numpy.zeros((self.Nboot, ) + (self.L, ) * self.dims, dtype=numpy.complex128)
+        self.correlator_x_samples = numpy.zeros((self.Nboot, ) + (self.L, ) * self.dims, dtype=numpy.complex128)
+        self.Laplace_p_samples = numpy.zeros((self.Nboot, ) + (self.L, ) * self.dims, dtype=numpy.complex128)
 
-        for i in range(self.num_bootstraps):
+        for i in tqdm(range(self.Nboot)):
             self.correlator_p_samples[i] = numpy.mean(self.full_p_correlator[bootstraps[i]], axis=0)
             self.correlator_x_samples[i] =  numpy.mean(self.full_x_correlator[bootstraps[i]], axis=0)
             self.Laplace_p_samples[i] =  numpy.mean(self.Laplace_p[bootstraps[i]], axis=0)
@@ -245,12 +282,22 @@ class full_analysis_3D(object):
 
         self.boot_samples = self.correlator_p_samples + self.Laplace_p_samples
 
+        print('Finished calculating bootstrap')
+
     def get_covariance_matrix(self):
-        cov_matrix = numpy.cov(self.boot_samples, rowvar=True)
-        cov_1_2 = numpy.linalg.cholesky(cov_matrix)
-        self.cov_inv = numpy.linalg.inv(cov_1_2)
+        print('Finding Covariance matrix')
+        if self.dims == 1:
+            cov_matrix = numpy.cov(self.boot_samples[:, self.p_sq[self.dims] <= self.p_max], rowvar=False)
+            cov_1_2 = numpy.linalg.cholesky(cov_matrix)
+            self.cov_inv = numpy.linalg.inv(cov_1_2)
+
+        else:
+            print("Multidimensional fitting not implemented yet")
+
+        print('Finished finding covariance matrix')
 
     def fit(self):
+        print('Running fits')
         results = numpy.mean(self.full_data, axis=0)
 
         def minimize_me(alpha, beta, gamma, eta):
@@ -273,8 +320,7 @@ class full_analysis_3D(object):
         res = least_squares(minimize_me, [0, 0, 0, 0], method="lm")
 
         print(res.x)
+        print('Finished running fits')
 
 
-
-
-
+# a = full_analysis_3D(256, 2, 0.2, -0.062, '(0, 0)', '(1, 1)', 1, 1)
