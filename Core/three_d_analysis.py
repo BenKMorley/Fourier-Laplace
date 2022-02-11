@@ -1,6 +1,8 @@
 import numpy
 import matplotlib.pyplot as plt
+import matplotlib
 from numpy.fft import fftn, ifftn
+from py import std
 from scipy.optimize import minimize, least_squares
 from tqdm import tqdm
 import sys
@@ -9,15 +11,19 @@ import re
 import pdb
 import pickle
 import h5py
+from ast import literal_eval
+
 
 # Import from the Core directory
 sys.path.append(os.getcwd())
 sys.path.append(os.getcwd() + '/Core')
 
-from Server.parameters import FL_dir
+from Core.parameters import FL_dir
 
 from Core.MISC import GRID_convention_g, GRID_convention_L, GRID_convention_m, GRID_convention_N
 from Core.Laplace import Laplace_Transform_1D, Laplace_Transform_ND
+
+matplotlib.rcParams.update({'text.usetex': True})
 
 
 def get_result_index(f, comps1, comps2):
@@ -40,6 +46,7 @@ def get_result_index(f, comps1, comps2):
 
     return result_index
 
+
 class analysis_3D_one_config(object):
     def __init__(self, L, N, g, m, components1, components2, config, base_dir=FL_dir,
                  x_max=numpy.inf, offset=(1, 1, 1)):
@@ -57,9 +64,6 @@ class analysis_3D_one_config(object):
         self.directory = f"{base_dir}/{GRID_convention_g(g)}/{GRID_convention_N(N)}/{GRID_convention_L(L)}/{GRID_convention_m(m)}/FL/"
 
         self.load_in_data()
-        self.process_p_correlator()
-        self.get_x_correlator()
-        self.get_LT()
 
     def load_in_data(self):
         import h5py
@@ -67,7 +71,7 @@ class analysis_3D_one_config(object):
         result_file = f'cosmhol-su{self.N}_L{self.L}_g{self.g}_m2{self.m}-FL.{self.config}.h5'
 
         f = h5py.File(f'{self.directory}{result_file}')
-        
+
         print(f'T1: {self.components1}')
         print(f'T2: {self.components2}')
 
@@ -98,7 +102,9 @@ class analysis_3D_one_config(object):
             print("Error: Two-Point and onept don't agree")
             self.correlator_p = numpy.full((self.L, self.L, self.L), numpy.nan, dtype=numpy.complex128)
 
-        self.correlator_p[0, 0, 0] -= onept1 * onept2
+        # Keep this here for reference so the data can be cross checked
+        self.onept = onept1 * onept2
+        self.correlator_p[0, 0, 0] -= self.onept
 
     def get_x_correlator(self):
         self.correlator_x = ifftn(self.correlator_p)
@@ -109,9 +115,9 @@ class analysis_3D_one_config(object):
 
         # Shift the location of the period boundary so x goes between -L / 2 and L / 2
         x_s = (x_s + self.L // 2) % self.L - self.L // 2
-        
+
         mod_x_sq = x_s[0] ** 2 + x_s[1] ** 2 + x_s[2] ** 2
-        
+
         # Set all x values further from the origin than x_max to 0
         # Add a small buffer so that we can use x_max for integers inclusively
         self.correlator_x[mod_x_sq - 10 ** -7 > self.x_max ** 2] = 0
@@ -121,10 +127,10 @@ class analysis_3D_one_config(object):
         # Recalculate the x correlator
         self.correlator_x = ifftn(self.correlator_p)
 
-# analysis_3D_one_config(256, 2, 0.2, -0.062, (0, 0), (1, 1), 100, x_max=1)
 
 class full_analysis_3D(object):
-    def __init__(self, L, N, g, m, T1, T2, x_max, dims, offset=(1, 1, 1), Nboot=500, p_max=1):
+    def __init__(self, L, N, g, m, T1, T2, x_max, dims, offset=(1, 1, 1), Nboot=500, p_max=1,
+                 use_eta=False):
         self.N = N
         self.L = L
         self.g = g
@@ -136,16 +142,38 @@ class full_analysis_3D(object):
         self.T2 = T2
         self.p_max = p_max
         self.Nboot = Nboot
-        self.Nboot = 50
+        self.use_eta = use_eta
+
+        if use_eta:
+            self.nparams = 3
+
+        else:
+            self.nparams = 2
 
         self.directory = 'Server/data'
 
         self.load_in_data()
         self.find_momenta()
+
+        # The momenta to be used in the fit
+        self.keep = self.p_sq[self.dims] <= self.p_max
+
+        # Don't use the origin
+        self.keep[(0, ) * dims] = 0
+
+        # Don't use the p < 0 data as the Laplace Transform is not symmetric
+        pos_p = numpy.arange(L) > L // 2
+
+        for d in range(dims):
+            numpy.put_along_axis(self.keep, numpy.arange(L)[pos_p], False, d)
+
+        numpy.random.seed(544287412)
+
         self.generate_fake_data()
         self.calculate_bootstrap()
         self.get_covariance_matrix()
         self.fit()
+        self.plot_fit()
 
     def find_momenta(self):
         print('Calculating momenta')
@@ -176,7 +204,6 @@ class full_analysis_3D(object):
                 p_hat = 2 * numpy.sin(p_s[d] / 2)
                 self.p_hat_sq[dims] += p_hat ** 2
                 self.p_sq[dims] += p_s[d] ** 2
-            
 
         print('Finished Calculating Momenta')
 
@@ -197,24 +224,24 @@ class full_analysis_3D(object):
         # Figure out the impact of the onept contribution
         data_p_onept = numpy.zeros((self.L, ) * 3)
         data_p_onept[0, 0, 0] = -1
-        
+
         self.data_x_alpha = ifftn(data_p_alpha)
         self.data_x_beta = ifftn(data_p_beta)
         self.data_x_gamma = ifftn(data_p_gamma)
         self.data_x_eta = ifftn(data_p_eta)
         self.data_x_onept = ifftn(data_p_onept)
 
-        self.data_p_FT_alpha = fftn(self.data_x_alpha)[(0, ) * (3 - self.dims)]
-        self.data_p_FT_beta = fftn(self.data_x_beta)[(0, ) * (3 - self.dims)]
-        self.data_p_FT_gamma = fftn(self.data_x_gamma)[(0, ) * (3 - self.dims)]
-        self.data_p_FT_eta = fftn(self.data_x_eta)[(0, ) * (3 - self.dims)]
-        self.data_p_FT_onept = fftn(self.data_x_onept)[(0, ) * (3 - self.dims)]
+        self.data_p_FT_alpha = fftn(self.data_x_alpha)
+        self.data_p_FT_beta = fftn(self.data_x_beta)
+        self.data_p_FT_gamma = fftn(self.data_x_gamma)
+        self.data_p_FT_eta = fftn(self.data_x_eta)
+        self.data_p_FT_onept = fftn(self.data_x_onept)
 
-        self.data_p_LT_alpha = Laplace_Transform_ND(self.data_x_alpha, dim=3, offset=self.offset, x_max=self.x_max)[(0, ) * (3 - self.dims)]
-        self.data_p_LT_beta = Laplace_Transform_ND(self.data_x_beta, dim=3, offset=self.offset, x_max=self.x_max)[(0, ) * (3 - self.dims)]
-        self.data_p_LT_gamma = Laplace_Transform_ND(self.data_x_gamma, dim=3, offset=self.offset, x_max=self.x_max)[(0, ) * (3 - self.dims)]
-        self.data_p_LT_eta = Laplace_Transform_ND(self.data_x_eta, dim=3, offset=self.offset, x_max=self.x_max)[(0, ) * (3 - self.dims)]
-        self.data_p_LT_onept = Laplace_Transform_ND(self.data_x_onept, dim=3, offset=self.offset, x_max=self.x_max)[(0, ) * (3 - self.dims)]
+        self.data_p_LT_alpha = Laplace_Transform_ND(self.data_x_alpha, dim=3, offset=self.offset, x_max=self.x_max)
+        self.data_p_LT_beta = Laplace_Transform_ND(self.data_x_beta, dim=3, offset=self.offset, x_max=self.x_max)
+        self.data_p_LT_gamma = Laplace_Transform_ND(self.data_x_gamma, dim=3, offset=self.offset, x_max=self.x_max)
+        self.data_p_LT_eta = Laplace_Transform_ND(self.data_x_eta, dim=3, offset=self.offset, x_max=self.x_max)
+        self.data_p_LT_onept = Laplace_Transform_ND(self.data_x_onept, dim=3, offset=self.offset, x_max=self.x_max)
 
         self.data_p_alpha = self.data_p_FT_alpha + self.data_p_LT_alpha
         self.data_p_beta = self.data_p_FT_beta + self.data_p_LT_beta
@@ -228,21 +255,34 @@ class full_analysis_3D(object):
         self.data_x_eta = self.data_x_eta[(0, ) * (3 - self.dims)]
         self.data_x_onept = self.data_x_onept[(0, ) * (3 - self.dims)]
 
-        # Now only take the data upto qmax
-        # self.data_x_alpha = self.data_x_alpha[self.p_sq[self.dims] <= self.p_max]
-        # self.data_x_beta = self.data_x_beta[self.p_sq[self.dims] <= self.p_max]
-        # self.data_x_gamma = self.data_x_gamma[self.p_sq[self.dims] <= self.p_max]
-        # self.data_x_eta = self.data_x_eta[self.p_sq[self.dims] <= self.p_max]
-        # self.data_x_onept = self.data_x_onept[self.p_sq[self.dims] <= self.p_max]
+        self.data_p_LT_alpha = self.data_p_LT_alpha[(0, ) * (3 - self.dims)]
+        self.data_p_LT_beta = self.data_p_LT_beta[(0, ) * (3 - self.dims)]
+        self.data_p_LT_gamma = self.data_p_LT_gamma[(0, ) * (3 - self.dims)]
+        self.data_p_LT_eta = self.data_p_LT_eta[(0, ) * (3 - self.dims)]
+        self.data_p_LT_onept = self.data_p_LT_onept[(0, ) * (3 - self.dims)]
+
+        self.data_p_FT_alpha = self.data_p_FT_alpha[(0, ) * (3 - self.dims)]
+        self.data_p_FT_beta = self.data_p_FT_beta[(0, ) * (3 - self.dims)]
+        self.data_p_FT_gamma = self.data_p_FT_gamma[(0, ) * (3 - self.dims)]
+        self.data_p_FT_eta = self.data_p_FT_eta[(0, ) * (3 - self.dims)]
+        self.data_p_FT_onept = self.data_p_FT_onept[(0, ) * (3 - self.dims)]
+
+        self.data_p_alpha = self.data_p_alpha[(0, ) * (3 - self.dims)]
+        self.data_p_beta = self.data_p_beta[(0, ) * (3 - self.dims)]
+        self.data_p_gamma = self.data_p_gamma[(0, ) * (3 - self.dims)]
+        self.data_p_eta = self.data_p_eta[(0, ) * (3 - self.dims)]
+        self.data_p_onept = self.data_p_onept[(0, ) * (3 - self.dims)]
         print('Finished Generating fake data')
 
     def load_in_data(self):
         print('Loading in data')
         self.configs = pickle.load(open(f'Server/data/configs_N{self.N}_g{self.g}_L{self.L}_m{self.m}.pcl', 'rb'))
+        self.n_conf = len(self.configs)
 
         self.full_p_correlator = numpy.load(f'Server/data/full_data/Fourier_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}_{self.T2}_dims{self.dims}.npy')
         self.full_x_correlator = numpy.load(f'Server/data/full_data/Correlator_x_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}_{self.T2}_dims{self.dims}.npy')
         self.Laplace_p = numpy.load(f'Server/data/full_data/Laplace_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}_{self.T2}_xmax{self.x_max:.1f}_dims{self.dims}.npy')
+        Onepts = numpy.load(f'Server/data/full_data/Onept_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}_{self.T2}_dims{self.dims}.npy')
 
         self.full_data = self.full_p_correlator + self.Laplace_p
 
@@ -252,8 +292,18 @@ class full_analysis_3D(object):
 
         onept1 = pickle.load(open(f'Server/data/onept_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}.pcl', 'rb'))
         onept2 = pickle.load(open(f'Server/data/onept_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T2}.pcl', 'rb'))
-
         self.onept = onept1 * onept2
+
+        # Check that the onepts are consistant
+        assert numpy.sum(numpy.abs(Onepts - self.onept) > (10 ** -15 * self.onept)) == 0
+
+        # Check the onept and two-point functions are consistant
+        assert numpy.max(numpy.abs(self.full_p_correlator[:, 0] - self.onepts1 * self.onepts2)) < (10 ** -12 * self.onept)
+
+        # Check that we recalculate the same onept
+        assert abs(numpy.mean(self.onepts1) - onept1) < abs(onept1 * 10 ** -15)
+        assert abs(numpy.mean(self.onepts2) - onept2) < abs(onept2 * 10 ** -15)
+
         print('Finished Loading in data')
 
     def calculate_bootstrap(self):
@@ -263,11 +313,13 @@ class full_analysis_3D(object):
         self.correlator_p_samples = numpy.zeros((self.Nboot, ) + (self.L, ) * self.dims, dtype=numpy.complex128)
         self.correlator_x_samples = numpy.zeros((self.Nboot, ) + (self.L, ) * self.dims, dtype=numpy.complex128)
         self.Laplace_p_samples = numpy.zeros((self.Nboot, ) + (self.L, ) * self.dims, dtype=numpy.complex128)
+        self.boot_samples = numpy.zeros((self.Nboot, ) + (self.L, ) * self.dims, dtype=numpy.complex128)
 
         for i in tqdm(range(self.Nboot)):
             self.correlator_p_samples[i] = numpy.mean(self.full_p_correlator[bootstraps[i]], axis=0)
-            self.correlator_x_samples[i] =  numpy.mean(self.full_x_correlator[bootstraps[i]], axis=0)
-            self.Laplace_p_samples[i] =  numpy.mean(self.Laplace_p[bootstraps[i]], axis=0)
+            self.correlator_x_samples[i] = numpy.mean(self.full_x_correlator[bootstraps[i]], axis=0)
+            self.Laplace_p_samples[i] = numpy.mean(self.Laplace_p[bootstraps[i]], axis=0)
+            self.boot_samples[i] = numpy.mean(self.full_data[bootstraps[i]], axis=0)
 
             # Add in the effect of a different value of the onept in this case
             onepts1 = self.onepts1[bootstraps[i]]
@@ -276,40 +328,45 @@ class full_analysis_3D(object):
             delta_onept = numpy.mean(onepts1) * numpy.mean(onepts2) - self.onept
 
             # Add in the effect of this change to the onept
-            self.correlator_p_samples += self.data_p_FT_onept * delta_onept
-            self.correlator_x_samples += self.data_x_onept * delta_onept
-            self.Laplace_p_samples += self.data_p_LT_onept * delta_onept
+            self.correlator_p_samples[i] += self.data_p_FT_onept * delta_onept
+            self.correlator_x_samples[i] += self.data_x_onept * delta_onept
+            self.Laplace_p_samples[i] += self.data_p_LT_onept * delta_onept
 
-        self.boot_samples = self.correlator_p_samples + self.Laplace_p_samples
+        # For the final fit we only want the real part - otherwise concepts like covariance are
+        # confusing
+        self.boot_samples = self.boot_samples.real
+        self.correlator_p_samples = self.correlator_p_samples.real
+        self.Laplace_p_samples = self.Laplace_p_samples.real
 
         print('Finished calculating bootstrap')
 
     def get_covariance_matrix(self):
         print('Finding Covariance matrix')
         if self.dims == 1:
-            cov_matrix = numpy.cov(self.boot_samples[:, self.p_sq[self.dims] <= self.p_max], rowvar=False)
+            cov_matrix = numpy.cov(self.boot_samples[:, self.keep], rowvar=False)
             cov_1_2 = numpy.linalg.cholesky(cov_matrix)
             self.cov_inv = numpy.linalg.inv(cov_1_2)
 
         else:
             print("Multidimensional fitting not implemented yet")
 
+
         print('Finished finding covariance matrix')
 
     def fit(self):
         print('Running fits')
-        results = numpy.mean(self.full_data, axis=0)
+        # Run the central fit
+        results = numpy.mean(self.full_data, axis=0).real[self.keep]
 
-        def minimize_me(alpha, beta, gamma, eta):
-            p_correlator = alpha * self.data_p_alpha
-            p_correlator += beta * self.data_p_beta
-            p_correlator += gamma * self.data_p_gamma
-            p_correlator += eta * self.data_p_eta
+        def minimize_me(x):
+            alpha, beta = x[0: 2]
 
-            x_corrleator = ifftn(p_correlator)
-            FT = fftn(x_corrleator)[0, 0]
-            LT = Laplace_Transform_ND(x_corrleator, 3, (1, 1, 1), x_max=self.x_max)
-            predictions = FT + LT
+            predictions = alpha * self.data_p_alpha.real[self.keep]
+            predictions += beta * self.data_p_beta.real[self.keep]
+
+            if self.use_eta:
+                eta = x[2]
+                predictions += eta * self.data_p_eta.real[self.keep]
 
             residuals = results - predictions
 
@@ -317,10 +374,106 @@ class full_analysis_3D(object):
 
             return normalized_residuals
 
-        res = least_squares(minimize_me, [0, 0, 0, 0], method="lm")
+        if self.use_eta:
+            x0 = [0, 0, 0]
 
-        print(res.x)
+        else:
+            x0 = [0, 0]
+
+        res = least_squares(minimize_me, x0, method="lm")
+
+        self.fit_central = res.x
+
+        # Make new bootstrap indices
+        bootstraps = numpy.random.randint(len(self.configs), size=(self.Nboot, len(self.configs)))
+        self.fit_params = numpy.zeros((self.Nboot, self.nparams))
+
+        for i in range(self.Nboot):
+            results = numpy.mean(self.full_data[bootstraps[i]], axis=0).real[self.keep]
+
+            def minimize_me(x):
+                alpha = x[0]
+                beta = x[1]
+
+                if self.use_eta:
+                    eta = x[2]
+
+                predictions = alpha * self.data_p_alpha.real[self.keep]
+                predictions += beta * self.data_p_beta.real[self.keep]
+
+                if self.use_eta:
+                    predictions += eta * self.data_p_eta.real[self.keep]
+
+                residuals = results - predictions
+
+                normalized_residuals = numpy.dot(self.cov_inv, residuals)
+
+                return normalized_residuals
+
+            res = least_squares(minimize_me, x0, method="lm")
+
+            self.fit_params[i] = res.x
+
         print('Finished running fits')
 
+    def plot_fit(self):
+        print('Plotting the fit')
+        # Plot the actual data
+        mean_data = numpy.mean(self.full_data, axis=0).real[self.keep]
+        std_data = numpy.std(self.boot_samples, axis=0)[self.keep]
 
-# a = full_analysis_3D(256, 2, 0.2, -0.062, '(0, 0)', '(1, 1)', 1, 1)
+        mean_data_FT = numpy.mean(self.full_p_correlator, axis=0).real[self.keep]
+        std_data_FT = numpy.std(self.correlator_p_samples, axis=0)[self.keep]
+
+        mean_data_LT = numpy.mean(self.Laplace_p, axis=0).real[self.keep]
+        std_data_LT = numpy.std(self.Laplace_p_samples, axis=0)[self.keep]
+
+        p_s = numpy.sqrt(self.p_sq[1])[self.keep]
+
+        plt.plot(p_s, mean_data, color='k')
+        plt.fill_between(p_s, mean_data - std_data, mean_data + std_data, alpha=0.2, color='k', label='data total')
+        plt.fill_between(p_s, mean_data_FT - std_data_FT, mean_data_FT + std_data_FT, alpha=0.2, color='g', label='data FT')
+        plt.fill_between(p_s, mean_data_LT - std_data_LT, mean_data_LT + std_data_LT, alpha=0.2, color='r', label='data LT')
+
+        # Now add in the fit result
+        alpha, beta = self.fit_central[0: 2]
+        predictions = alpha * self.data_p_alpha.real[self.keep]
+        predictions += beta * self.data_p_beta.real[self.keep]
+
+        predictions_FT = alpha * self.data_p_FT_alpha.real[self.keep]
+        predictions_FT += beta * self.data_p_FT_beta.real[self.keep]
+
+        predictions_LT = alpha * self.data_p_LT_alpha.real[self.keep]
+        predictions_LT += beta * self.data_p_LT_beta.real[self.keep]
+
+        if self.use_eta:
+            eta = self.fit_central[2]
+            predictions += eta * self.data_p_eta.real[self.keep]
+            predictions_FT += eta * self.data_p_FT_eta.real[self.keep]
+            predictions_LT += eta * self.data_p_LT_eta.real[self.keep]
+
+            delta_alpha, delta_beta, delta_eta = numpy.std(self.fit_params, axis=0)
+            plt.title(rf'$\alpha = {alpha} \pm {delta_alpha}$, $\beta={beta} \pm {delta_beta}$, $\eta={eta} \pm {delta_eta}$')
+
+        else:
+            delta_alpha, delta_beta = numpy.std(self.fit_params, axis=0)
+            plt.title(rf'$\alpha = {alpha} \pm {delta_alpha}$, $\beta={beta} \pm {delta_beta}$')
+
+        plt.plot(p_s, predictions, ls='--', color='k', label='fit total')
+        plt.plot(p_s, predictions_FT, ls='--', color='g', label='fit FT')
+        plt.plot(p_s, predictions_LT, ls='--', color='r', label='fit LT')
+
+        plt.xlabel(r'$p$')
+        x0, y0 = literal_eval(self.T1)
+        x1, y1 = literal_eval(self.T2)
+
+        plt.ylabel(rf'$\langle T{x0}{y0} T{x1}{y1} \rangle (p)$')
+        plt.legend()
+        plt.show()
+
+        print('Finished Plotting')
+
+        return None
+
+
+a = full_analysis_3D(256, 2, 0.2, -0.062, '(0, 0)', '(1, 1)', 1, 1, p_max=1, use_eta=False)
