@@ -2,8 +2,7 @@ import numpy
 import matplotlib.pyplot as plt
 import matplotlib
 from numpy.fft import fftn, ifftn
-from py import std
-from scipy.optimize import minimize, least_squares
+from scipy.optimize import least_squares
 from tqdm import tqdm
 import sys
 import os
