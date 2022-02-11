@@ -22,6 +22,9 @@ def Laplace_Transform_ND(data, dim, offset, x_max=numpy.inf):
         # D_ijk = D_zij e_k^z = (D_yzi e_j^y) e_k^z = ((D_xyz e_i^x) e_j^y) e_k^z
         data = numpy.tensordot(data, exp_comb, axes=(0, 1))
 
+    # We don't want to introduce a constant into the method so take
+    data = data - data[(0, ) * dim]
+
     return data
 
 
@@ -42,4 +45,3 @@ def Laplace_Transform_1D(data, dim, offset, x_max=numpy.inf):
         result[i] = numpy.sum(exp_comb * data)
 
     return result
-
