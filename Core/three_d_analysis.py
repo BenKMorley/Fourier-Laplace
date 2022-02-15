@@ -473,6 +473,3 @@ class full_analysis_3D(object):
         print('Finished Plotting')
 
         return None
-
-
-a = full_analysis_3D(256, 2, 0.2, -0.062, '(0, 0)', '(1, 1)', 1, 1, p_max=1, use_eta=False)
