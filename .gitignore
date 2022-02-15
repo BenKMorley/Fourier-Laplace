@@ -1,3 +1,7 @@
+Server/log/*
+Server/data/*
+Core/parameters.py
+Server/temp.sh
 Server/run*
 Server/parameters.py
 *cpython*
