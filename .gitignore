@@ -2,6 +2,7 @@ Server/log/*
 Server/data/*
 Core/parameters.py
 Server/temp.sh
+Server/data/full_data/*
 Server/run*
 Server/parameters.py
 *cpython*
