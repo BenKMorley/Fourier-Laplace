@@ -173,6 +173,10 @@ class full_analysis_3D(object):
         # Set the RNG seed
         numpy.random.seed(seed)
 
+        # Generate the bootstrap indices
+        self.bootstraps = numpy.random.randint(len(self.configs), size=(self.Nboot, len(self.configs)))
+
+
     def find_momenta(self):
         print('Calculating momenta')
         # Make the q squared and p_hat squared contributions
@@ -300,8 +304,6 @@ class full_analysis_3D(object):
 
     def calculate_bootstrap(self):
         print('Calculating Bootstrap')
-        self.bootstraps = numpy.random.randint(len(self.configs), size=(self.Nboot, len(self.configs)))
-
         self.correlator_p_samples = numpy.zeros((self.Nboot, ) + (self.L, ) * self.dims, dtype=numpy.complex128)
         self.correlator_x_samples = numpy.zeros((self.Nboot, ) + (self.L, ) * self.dims, dtype=numpy.complex128)
         self.Laplace_p_samples = numpy.zeros((self.Nboot, ) + (self.L, ) * self.dims, dtype=numpy.complex128)
@@ -377,7 +379,6 @@ class full_analysis_3D(object):
         self.fit_central = res.x
 
         # Make new bootstrap indices
-        self.bootstraps = numpy.random.randint(len(self.configs), size=(self.Nboot, len(self.configs)))
         self.fit_params = numpy.zeros((self.Nboot, self.nparams))
 
         for i in range(self.Nboot):
