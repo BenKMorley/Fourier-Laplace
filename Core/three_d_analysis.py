@@ -46,6 +46,11 @@ def get_result_index(f, comps1, comps2):
     return result_index
 
 
+def analytic(p_sq, alpha, beta, gamma, eta, N, g, dims=3):
+    return N ** 2 * (p_sq / g ** 2) * (alpha * numpy.sqrt(p_sq) + beta * g * (1 / 2) *
+        numpy.log(p_sq / g ** 2, out=numpy.zeros_like(p_sq), where=p_sq != 0) + gamma) + eta
+
+
 class analysis_3D_one_config(object):
     def __init__(self, L, N, g, m, components1, components2, config, base_dir=FL_dir,
                  x_max=numpy.inf, offset=(1, 1, 1)):
@@ -129,7 +134,7 @@ class analysis_3D_one_config(object):
 
 class full_analysis_3D(object):
     def __init__(self, L, N, g, m, T1, T2, x_max, dims, offset=(1, 1, 1), Nboot=500, p_max=1,
-                 use_eta=False):
+                 use_eta=False, seed=544287412):
         self.N = N
         self.L = L
         self.g = g
@@ -151,7 +156,6 @@ class full_analysis_3D(object):
 
         self.directory = 'Server/data'
 
-        self.load_in_data()
         self.find_momenta()
 
         # The momenta to be used in the fit
@@ -166,13 +170,8 @@ class full_analysis_3D(object):
         for d in range(dims):
             numpy.put_along_axis(self.keep, numpy.arange(L)[pos_p], False, d)
 
-        numpy.random.seed(544287412)
-
-        self.generate_fake_data()
-        self.calculate_bootstrap()
-        self.get_covariance_matrix()
-        self.fit()
-        self.plot_fit()
+        # Set the RNG seed
+        numpy.random.seed(seed)
 
     def find_momenta(self):
         print('Calculating momenta')
@@ -206,19 +205,13 @@ class full_analysis_3D(object):
 
         print('Finished Calculating Momenta')
 
-    def analytic(self, alpha, beta, gamma, eta, dims=3):
-        p_sq = self.p_hat_sq[dims]
-
-        return self.N ** 2 * (p_sq / self.g ** 2) * (alpha * numpy.sqrt(p_sq) + beta * self.g * (1 / 2) *
-            numpy.log(p_sq / self.g ** 2, out=numpy.zeros_like(p_sq), where=p_sq != 0) + gamma) + eta
-
     def generate_fake_data(self):
         print('Generating Fake data')
         # Use the linearity of the Fourier and Laplace Transforms to prerun them
-        data_p_alpha = self.analytic(1, 0, 0, 0)
-        data_p_beta = self.analytic(0, 1, 0, 0)
-        data_p_gamma = self.analytic(0, 0, 1, 0)
-        data_p_eta = self.analytic(0, 0, 0, 1)
+        data_p_alpha = analytic(self.p_hat_sq[3], 1, 0, 0, 0, self.N, self.g)
+        data_p_beta = analytic(self.p_hat_sq[3], 0, 1, 0, 0, self.N, self.g)
+        data_p_gamma = analytic(self.p_hat_sq[3], 0, 0, 1, 0, self.N, self.g)
+        data_p_eta = analytic(self.p_hat_sq[3], 0, 0, 0, 1, self.N, self.g)
 
         # Figure out the impact of the onept contribution
         data_p_onept = numpy.zeros((self.L, ) * 3)
@@ -307,7 +300,7 @@ class full_analysis_3D(object):
 
     def calculate_bootstrap(self):
         print('Calculating Bootstrap')
-        bootstraps = numpy.random.randint(len(self.configs), size=(self.Nboot, len(self.configs)))
+        self.bootstraps = numpy.random.randint(len(self.configs), size=(self.Nboot, len(self.configs)))
 
         self.correlator_p_samples = numpy.zeros((self.Nboot, ) + (self.L, ) * self.dims, dtype=numpy.complex128)
         self.correlator_x_samples = numpy.zeros((self.Nboot, ) + (self.L, ) * self.dims, dtype=numpy.complex128)
@@ -315,14 +308,14 @@ class full_analysis_3D(object):
         self.boot_samples = numpy.zeros((self.Nboot, ) + (self.L, ) * self.dims, dtype=numpy.complex128)
 
         for i in tqdm(range(self.Nboot)):
-            self.correlator_p_samples[i] = numpy.mean(self.full_p_correlator[bootstraps[i]], axis=0)
-            self.correlator_x_samples[i] = numpy.mean(self.full_x_correlator[bootstraps[i]], axis=0)
-            self.Laplace_p_samples[i] = numpy.mean(self.Laplace_p[bootstraps[i]], axis=0)
-            self.boot_samples[i] = numpy.mean(self.full_data[bootstraps[i]], axis=0)
+            self.correlator_p_samples[i] = numpy.mean(self.full_p_correlator[self.bootstraps[i]], axis=0)
+            self.correlator_x_samples[i] = numpy.mean(self.full_x_correlator[self.bootstraps[i]], axis=0)
+            self.Laplace_p_samples[i] = numpy.mean(self.Laplace_p[self.bootstraps[i]], axis=0)
+            self.boot_samples[i] = numpy.mean(self.full_data[self.bootstraps[i]], axis=0)
 
             # Add in the effect of a different value of the onept in this case
-            onepts1 = self.onepts1[bootstraps[i]]
-            onepts2 = self.onepts2[bootstraps[i]]
+            onepts1 = self.onepts1[self.bootstraps[i]]
+            onepts2 = self.onepts2[self.bootstraps[i]]
 
             delta_onept = numpy.mean(onepts1) * numpy.mean(onepts2) - self.onept
 
@@ -348,14 +341,14 @@ class full_analysis_3D(object):
 
         else:
             print("Multidimensional fitting not implemented yet")
-
+            exit()
 
         print('Finished finding covariance matrix')
 
     def fit(self):
         print('Running fits')
         # Run the central fit
-        results = numpy.mean(self.full_data, axis=0).real[self.keep]
+        self.fit_data = numpy.mean(self.full_data, axis=0).real[self.keep]
 
         def minimize_me(x):
             alpha, beta = x[0: 2]
@@ -367,7 +360,7 @@ class full_analysis_3D(object):
                 eta = x[2]
                 predictions += eta * self.data_p_eta.real[self.keep]
 
-            residuals = results - predictions
+            residuals = self.fit_data - predictions
 
             normalized_residuals = numpy.dot(self.cov_inv, residuals)
 
@@ -384,11 +377,11 @@ class full_analysis_3D(object):
         self.fit_central = res.x
 
         # Make new bootstrap indices
-        bootstraps = numpy.random.randint(len(self.configs), size=(self.Nboot, len(self.configs)))
+        self.bootstraps = numpy.random.randint(len(self.configs), size=(self.Nboot, len(self.configs)))
         self.fit_params = numpy.zeros((self.Nboot, self.nparams))
 
         for i in range(self.Nboot):
-            results = numpy.mean(self.full_data[bootstraps[i]], axis=0).real[self.keep]
+            results = numpy.mean(self.full_data[self.bootstraps[i]], axis=0).real[self.keep]
 
             def minimize_me(x):
                 alpha = x[0]
