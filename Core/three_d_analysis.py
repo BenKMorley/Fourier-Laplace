@@ -134,7 +134,7 @@ class analysis_3D_one_config(object):
 
 class full_analysis_3D(object):
     def __init__(self, L, N, g, m, T1, T2, x_max, dims, offset=(1, 1, 1), Nboot=500, p_max=1,
-                 use_eta=False, seed=544287412):
+                 use_eta=False, seed=544287412, configs=None):
         self.N = N
         self.L = L
         self.g = g
@@ -170,12 +170,18 @@ class full_analysis_3D(object):
         for d in range(dims):
             numpy.put_along_axis(self.keep, numpy.arange(L)[pos_p], False, d)
 
+        # Load in list of configs for this ensemble
+        if configs is None:
+            self.configs = pickle.load(open(f'Server/data/configs_N{self.N}_g{self.g}_L{self.L}_m{self.m}.pcl', 'rb'))
+
+        else:
+            self.configs = configs
+
         # Set the RNG seed
         numpy.random.seed(seed)
 
         # Generate the bootstrap indices
         self.bootstraps = numpy.random.randint(len(self.configs), size=(self.Nboot, len(self.configs)))
-
 
     def find_momenta(self):
         print('Calculating momenta')
@@ -272,7 +278,6 @@ class full_analysis_3D(object):
 
     def load_in_data(self):
         print('Loading in data')
-        self.configs = pickle.load(open(f'Server/data/configs_N{self.N}_g{self.g}_L{self.L}_m{self.m}.pcl', 'rb'))
         self.n_conf = len(self.configs)
 
         self.full_p_correlator = numpy.load(f'Server/data/full_data/Fourier_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}_{self.T2}_dims{self.dims}.npy')
