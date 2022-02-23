@@ -9,7 +9,7 @@ import pdb
 sys.path.append(os.getcwd())
 
 from Core.MISC import GRID_convention_g, GRID_convention_L, GRID_convention_m, GRID_convention_N
-from Server.parameters import FL_dir as base_dir
+from Core.parameters import FL_dir as base_dir
 
 parser = argparse.ArgumentParser()
 

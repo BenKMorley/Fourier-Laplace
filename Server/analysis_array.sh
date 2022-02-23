@@ -22,6 +22,7 @@
 #SBATCH --job-name=Fourier_Laplace   # Job name
 #SBATCH --mail-type=END,FAIL          # Mail events (NONE, BEGIN, END, FAIL, ALL)
 #SBATCH --mail-user=bkm1n18@soton.ac.uk    # Where to send mail
+#SBATCH --requeue                   ### On failure, requeue for another try
 
 #! Modify the environment seen by the application. For this example we need the default modules.
 . /etc/profile.d/modules.sh                # This line enables the module command
@@ -38,8 +39,10 @@ G=
 M=
 L=
 SIZE=
-T1=
-T2=
+T1_1=
+T1_2=
+T2_1=
+T2_2=
 XMAX=
 DIMS=
 
@@ -180,11 +183,9 @@ CONFIG_ARRAY=$( python3 Server/find_configs.py $N $G $M $L $SIZE )
 IFS=' ' read -a CONFIG_ARRAY <<< "$CONFIG_ARRAY"
 CONFIGS=${CONFIG_ARRAY[$ID]}
 
-echo "python3 $NAME $N $G $M $L \'$T1\' \'$T2\' \'$CONFIGS\' -x_max=$XMAX -dims=$DIMS"
+echo "python3 $NAME $N $G $M $L $T1_1 $T1_2 $T2_1 $T2_2 '$CONFIGS' -x_max=$XMAX -dims=$DIMS"
 
-myargs="$N $G $M $L '$T1' '$T2' '$CONFIGS' -x_max=$XMAX -dims=$DIMS"
-
-echo $myargs | xargs python3 $NAME
+python3 $NAME $N $G $M $L $T1_1 $T1_2 $T2_1 $T2_2 \'$CONFIGS\' -x_max=$XMAX -dims=$DIMS
 
 for conf in $(seq ${START} ${STEP} ${END})
 do

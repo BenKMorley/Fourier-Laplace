@@ -52,8 +52,8 @@ def analytic(p_sq, alpha, beta, gamma, eta, N, g, dims=3):
 
 
 class analysis_3D_one_config(object):
-    def __init__(self, L, N, g, m, components1, components2, config, base_dir=FL_dir,
-                 x_max=numpy.inf, offset=(1, 1, 1)):
+    def __init__(self, L, N, g, m, T1, T2, config, base_dir=FL_dir, x_max=numpy.inf,
+                 offset=(1, 1, 1)):
         self.N = N
         self.L = L
         self.g = g
@@ -61,8 +61,8 @@ class analysis_3D_one_config(object):
         self.dim = 3
         self.x_max = x_max
         self.offset = offset
-        self.components1 = components1
-        self.components2 = components2
+        self.T1 = T1
+        self.T2 = T2
         self.config = config
         self.base_dir = base_dir
         self.directory = f"{base_dir}/{GRID_convention_g(g)}/{GRID_convention_N(N)}/{GRID_convention_L(L)}/{GRID_convention_m(m)}/FL/"
@@ -76,10 +76,10 @@ class analysis_3D_one_config(object):
 
         f = h5py.File(f'{self.directory}{result_file}')
 
-        print(f'T1: {self.components1}')
-        print(f'T2: {self.components2}')
+        print(f'T1: {self.T1}')
+        print(f'T2: {self.T2}')
 
-        result_index = get_result_index(f, self.components1, self.components2)
+        result_index = get_result_index(f, self.T1, self.T2)
 
         if result_index is None:
             raise FileNotFoundError("h5 data file doesn't contain appropriate components")
@@ -90,14 +90,14 @@ class analysis_3D_one_config(object):
 
     def process_p_correlator(self):
         # We subtract the disconnected part from the p = 0 point
-        onept1 = pickle.load(open(f'Server/data/onept_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.components1}.pcl', 'rb'))
-        onept2 = pickle.load(open(f'Server/data/onept_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.components2}.pcl', 'rb'))
+        onept1 = pickle.load(open(f'Server/data/onept/onept_N{self.N}_g{self.g}_L{self.L}_m{self.m}_T{self.T1[0]}{self.T1[1]}.pcl', 'rb'))
+        onept2 = pickle.load(open(f'Server/data/onept/onept_N{self.N}_g{self.g}_L{self.L}_m{self.m}_T{self.T2[0]}{self.T2[1]}.pcl', 'rb'))
 
         # For self consistancy check if the [0, 0, 0] component matches the product of the onept functions
         onept_dir = f"{FL_dir}/{GRID_convention_g(self.g)}/{GRID_convention_N(self.N)}/{GRID_convention_L(self.L)}/{GRID_convention_m(self.m)}/onept/"
         f = h5py.File(f'{onept_dir}cosmhol-su{self.N}_L{self.L}_g{self.g}_m2{self.m}-emtc.{self.config}.h5')
-        onept_conf1 = f['emt']['value'][()][self.components1]['re'] + 1j * f['emt']['value'][()][self.components1]['im']
-        onept_conf2 = f['emt']['value'][()][self.components2]['re'] + 1j * f['emt']['value'][()][self.components2]['im']
+        onept_conf1 = f['emt']['value'][()][self.T1]['re'] + 1j * f['emt']['value'][()][self.T1]['im']
+        onept_conf2 = f['emt']['value'][()][self.T2]['re'] + 1j * f['emt']['value'][()][self.T2]['im']
 
         try:
             assert ((self.correlator_p[0, 0, 0] - onept_conf1 * onept_conf2) / self.correlator_p[0, 0, 0]) < 10 ** -12
@@ -280,19 +280,19 @@ class full_analysis_3D(object):
         print('Loading in data')
         self.n_conf = len(self.configs)
 
-        self.full_p_correlator = numpy.load(f'Server/data/full_data/Fourier_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}_{self.T2}_dims{self.dims}.npy')
-        self.full_x_correlator = numpy.load(f'Server/data/full_data/Correlator_x_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}_{self.T2}_dims{self.dims}.npy')
-        self.Laplace_p = numpy.load(f'Server/data/full_data/Laplace_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}_{self.T2}_xmax{self.x_max:.1f}_dims{self.dims}.npy')
-        Onepts = numpy.load(f'Server/data/full_data/Onept_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}_{self.T2}_dims{self.dims}.npy')
+        self.full_p_correlator = numpy.load(f'Server/data/full_data/Fourier_N{self.N}_g{self.g}_L{self.L}_m{self.m}_T{self.T1[0]}{self.T1[1]}_T{self.T2[0]}{self.T2[1]}_dims{self.dims}.npy')
+        self.full_x_correlator = numpy.load(f'Server/data/full_data/Correlator_x_N{self.N}_g{self.g}_L{self.L}_m{self.m}_T{self.T1[0]}{self.T1[1]}_T{self.T2[0]}{self.T2[1]}_dims{self.dims}.npy')
+        self.Laplace_p = numpy.load(f'Server/data/full_data/Laplace_N{self.N}_g{self.g}_L{self.L}_m{self.m}_T{self.T1[0]}{self.T1[1]}_T{self.T2[0]}{self.T2[1]}_xmax{self.x_max:.1f}_dims{self.dims}.npy')
+        Onepts = numpy.load(f'Server/data/full_data/Onept_N{self.N}_g{self.g}_L{self.L}_m{self.m}_T{self.T1[0]}{self.T1[1]}_T{self.T2[0]}{self.T2[1]}_dims{self.dims}.npy')
 
         self.full_data = self.full_p_correlator + self.Laplace_p
 
         # Also load in the onept data
-        self.onepts1 = numpy.load(f'Server/data/onept/onept_full_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}.npy')
-        self.onepts2 = numpy.load(f'Server/data/onept/onept_full_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T2}.npy')
+        self.onepts1 = numpy.load(f'Server/data/onept/onept_full_N{self.N}_g{self.g}_L{self.L}_m{self.m}_T{self.T1[0]}{self.T1[1]}.npy')
+        self.onepts2 = numpy.load(f'Server/data/onept/onept_full_N{self.N}_g{self.g}_L{self.L}_m{self.m}_T{self.T2[0]}{self.T2[1]}.npy')
 
-        onept1 = pickle.load(open(f'Server/data/onept_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T1}.pcl', 'rb'))
-        onept2 = pickle.load(open(f'Server/data/onept_N{self.N}_g{self.g}_L{self.L}_m{self.m}_{self.T2}.pcl', 'rb'))
+        onept1 = pickle.load(open(f'Server/data/onept/onept_N{self.N}_g{self.g}_L{self.L}_m{self.m}_T{self.T1[0]}{self.T1[1]}.pcl', 'rb'))
+        onept2 = pickle.load(open(f'Server/data/onept/onept_N{self.N}_g{self.g}_L{self.L}_m{self.m}_T{self.T2[0]}{self.T2[1]}.pcl', 'rb'))
         self.onept = onept1 * onept2
 
         # Check that the onepts are consistant
@@ -462,8 +462,8 @@ class full_analysis_3D(object):
         plt.plot(p_s, predictions_LT, ls='--', color='r', label='fit LT')
 
         plt.xlabel(r'$p$')
-        x0, y0 = literal_eval(self.T1)
-        x1, y1 = literal_eval(self.T2)
+        x0, y0 = self.T1
+        x1, y1 = self.T2
 
         plt.ylabel(rf'$\langle T{x0}{y0} T{x1}{y1} \rangle (p)$')
         plt.legend()
