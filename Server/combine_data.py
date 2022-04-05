@@ -5,55 +5,44 @@ from tqdm import tqdm
 import pdb
 import h5py
 import sys
-
-
-# Import from the Core directory
-sys.path.append(os.getcwd())
-sys.path.append(os.getcwd() + '/Core')
-
-from Server.parameters import FL_dir
-from Server.three_d_analysis import get_result_index
-
-from Core.MISC import GRID_convention_g, GRID_convention_L, GRID_convention_m, GRID_convention_N
+import pickle
 
 
 def combine(N, g, L, m, T0, T1, x_max, dims):
     base_dir = f"Server/data/"
 
-    files = os.popen(f'ls {base_dir}')
-    configs = []
+    configs = pickle.load(open(f'Server/data/configs_N{N}_g{g}_L{L}_m{m}.pcl', 'rb'))
 
-    for name in files:
-        if len(re.findall(rf'Laplace_N{N}_g{g}_L{L}_m{m}_\({T0[0]}, {T0[1]}\)_\({T1[0]}, {T1[1]}\)_config\d+_dims{dims}_xmax{x_max:.1f}.npy',
-                          name)) != 0:
-            config = int(re.findall(r'config\d+', name)[0][6:])
-            configs.append(config)
-
-    full_data_Laplace = numpy.zeros((len(configs), ) + (L, ) * dims)
-    full_data_Fourier = numpy.zeros((len(configs), ) + (L, ) * dims)
-    full_data_correlator_x = numpy.zeros((len(configs), ) + (L, ) * dims)
+    full_data_Laplace = numpy.zeros((len(configs), ) + (L, ) * dims, dtype=numpy.complex128)
+    full_data_Fourier = numpy.zeros((len(configs), ) + (L, ) * dims, dtype=numpy.complex128)
+    full_data_correlator_x = numpy.zeros((len(configs), ) + (L, ) * dims, dtype=numpy.complex128)
+    full_data_onepts = numpy.zeros(len(configs), dtype=numpy.complex128)
 
     for i, config in tqdm(enumerate(configs)):
-        data = numpy.load(f'Server/data/Laplace_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_config{config}_dims{dims}_xmax{x_max:.1f}.npy')
+        data = numpy.load(f'{base_dir}Laplace_N{N}_g{g}_L{L}_m{m}_T{T0[0]}{T0[1]}_T{T1[0]}{T1[1]}_config{config}_dims{dims}_xmax{x_max:.1f}.npy')
         full_data_Laplace[i] = data
 
+        data = numpy.load(f'{base_dir}Onept_N{N}_g{g}_L{L}_m{m}_T{T0[0]}{T0[1]}_T{T1[0]}{T1[1]}_config{config}_dims{dims}.npy')
+        full_data_onepts[i] = data
+
         try:
-            data = numpy.load(f'Server/data/Correlator_x_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_config{config}_dims{dims}.npy')
+            data = numpy.load(f'{base_dir}Correlator_x_N{N}_g{g}_L{L}_m{m}_T{T0[0]}{T0[1]}_T{T1[0]}{T1[1]}_config{config}_dims{dims}.npy')
             full_data_correlator_x[i] = data
 
         except Exception:
             print(f"No correlator data found config = {config}")
 
         try:
-            data = numpy.load(f'Server/data/Correlator_p_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_config{config}_dims{dims}.npy')
+            data = numpy.load(f'{base_dir}Correlator_p_N{N}_g{g}_L{L}_m{m}_T{T0[0]}{T0[1]}_T{T1[0]}{T1[1]}_config{config}_dims{dims}.npy')
             full_data_Fourier[i] = data
 
         except Exception:
             print(f"No correlator data found config = {config}")
     
-    numpy.save(f'Server/data/full_data/Laplace_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_xmax{x_max:.1f}_dims{dims}.npy', full_data_Laplace)
-    numpy.save(f'Server/data/full_data/Fourier_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_dims{dims}.npy', full_data_Fourier)
-    numpy.save(f'Server/data/full_data/Correlator_x_N{N}_g{g}_L{L}_m{m}_{T0}_{T1}_dims{dims}.npy', full_data_correlator_x)
+    numpy.save(f'{base_dir}full_data/Laplace_N{N}_g{g}_L{L}_m{m}_T{T0[0]}{T0[1]}_T{T1[0]}{T1[1]}_xmax{x_max:.1f}_dims{dims}.npy', full_data_Laplace)
+    numpy.save(f'{base_dir}full_data/Fourier_N{N}_g{g}_L{L}_m{m}_T{T0[0]}{T0[1]}_T{T1[0]}{T1[1]}_dims{dims}.npy', full_data_Fourier)
+    numpy.save(f'{base_dir}full_data/Correlator_x_N{N}_g{g}_L{L}_m{m}_T{T0[0]}{T0[1]}_T{T1[0]}{T1[1]}_dims{dims}.npy', full_data_correlator_x)
+    numpy.save(f'{base_dir}full_data/Onept_N{N}_g{g}_L{L}_m{m}_T{T0[0]}{T0[1]}_T{T1[0]}{T1[1]}_dims{dims}.npy', full_data_onepts)
 
 
 if __name__ == "__main__":
